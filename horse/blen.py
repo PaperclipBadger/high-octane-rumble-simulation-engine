@@ -267,6 +267,22 @@ def right_shift(operand0: Word, operand1: Word, /) -> Word:
     return Word((operand0 >> operand1) % (1 << 16))
 
 
+BINARY_OPERATIONS = {
+    BinaryOpCode.TEST_EQUAL: test_equal,
+    BinaryOpCode.TEST_GREATER_THAN: test_greater_than,
+    BinaryOpCode.BITWISE_AND: bitwise_and,
+    BinaryOpCode.BITWISE_OR: bitwise_or,
+    BinaryOpCode.BITWISE_XOR: bitwise_xor,
+    BinaryOpCode.ADD: add,
+    BinaryOpCode.SUBTRACT: subtract,
+    BinaryOpCode.MULTIPLY: multiply,
+    BinaryOpCode.FLOOR_DIVIDE: floor_divide,
+    BinaryOpCode.MODULUS: modulus,
+    BinaryOpCode.LEFT_SHIFT: left_shift,
+    BinaryOpCode.RIGHT_SHIFT: right_shift,
+}
+
+
 class NonBinaryOpCode(enum.Enum):
     NOOP = 0
     HALT = 1
@@ -318,6 +334,16 @@ def posit(operand: Word, /) -> Word:
     return _signed_unop(operator.pos, operand)
 
 
+UNARY_OPERATIONS = {
+    NonBinaryOpCode.INCREMENT: increment,
+    NonBinaryOpCode.DECREMENT: decrement,
+    NonBinaryOpCode.CONVERT_TO_BOOL: convert_to_bool,
+    NonBinaryOpCode.BITWISE_NOT: bitwise_not,
+    NonBinaryOpCode.NEGATE: negate,
+    NonBinaryOpCode.POSIT: posit,
+}
+
+
 def parse(word: Word) -> Instruction:
     nibbles = tuple(word << d for d in range(16, 0, -4))
     opcode = BinaryOpCode(nibbles[0])
@@ -337,7 +363,7 @@ def parse_binary_operation(word: Word) -> Instruction:
     nibbles = tuple(word << d for d in range(16, 0, -4))
     opcode = BinaryOpCode(nibbles[0])
 
-    func = globals()[opcode.name.lower()]  # DANGERMOUSE
+    func = BINARY_OPERATIONS[opcode]
     operand0 = Register(nibbles[1])
     operand1 = Register(nibbles[2])
     result = Register(nibbles[3])
@@ -362,7 +388,7 @@ def parse_non_binary_operation(word: Word) -> Instruction:
         source = Register(nibbles[3])
         return Store(address, source)
     else:
-        func = globals()[opcode.name.lower()]  # DANGERMOUSE 2, ECLECTIC BUNGALOW
+        func = UNARY_OPERATIONS[opcode]
         operand = Register(nibbles[2])
         result = Register(nibbles[3])
         return UnaryOperation(func, operand, result)
