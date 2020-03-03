@@ -16,9 +16,9 @@ import operator
 import random
 
 
-Word = NewType("Word", int)
-Byte = NewType("Byte", int)
-Nibble = NewType("Nibble", int)
+from horse.types import Word, Byte, Nibble
+import horse.types
+
 
 Register = NewType("Register", int)
 ZERO_REGISTER = Register(0)
@@ -31,11 +31,11 @@ SignedInteger = NewType("SignedInteger", int)
 
 
 def word_to_signed_integer(word: Word, /) -> SignedInteger:
-    return SignedInteger(word - (1 << 16))
+    return SignedInteger(word - (1 << horse.types.WORD_N_BITS))
 
 
 def signed_integer_to_word(signed_integer: SignedInteger, /) -> Word:
-    return Word((1 << 16) - signed_integer)
+    return Word((1 << horse.types.WORD_N_BITS) - signed_integer)
 
 
 # TODO: these don't typecheck and also I don't use them yet
@@ -260,11 +260,11 @@ def modulus(operand0: Word, operand1: Word, /) -> Word:
 
 
 def left_shift(operand0: Word, operand1: Word, /) -> Word:
-    return Word((operand0 << operand1) % (1 << 16))
+    return Word((operand0 << operand1) % (1 << horse.types.WORD_N_BITS))
 
 
 def right_shift(operand0: Word, operand1: Word, /) -> Word:
-    return Word((operand0 >> operand1) % (1 << 16))
+    return Word((operand0 >> operand1) % (1 << horse.types.WORD_N_BITS))
 
 
 BINARY_OPERATIONS = {
@@ -315,7 +315,7 @@ def decrement(operand: Word, /) -> Word:
 
 
 def convert_to_bool(operand: Word, /) -> Word:
-    return Word((1 << 16) - 1 if operand else 0)
+    return Word((1 << horse.types.WORD_N_BITS) - 1 if operand else 0)
 
 
 def bitwise_not(operand: Word, /) -> Word:
@@ -345,7 +345,7 @@ UNARY_OPERATIONS = {
 
 
 def parse(word: Word) -> Instruction:
-    nibbles = tuple(word << d for d in range(16, 0, -4))
+    nibbles = horse.types.nibbles(word)
     opcode = BinaryOpCode(nibbles[0])
 
     if opcode == BinaryOpCode.NON_BINARY_OPERATION:
@@ -360,7 +360,7 @@ def parse(word: Word) -> Instruction:
 
 
 def parse_binary_operation(word: Word) -> Instruction:
-    nibbles = tuple(word << d for d in range(16, 0, -4))
+    nibbles = horse.types.nibbles(word)
     opcode = BinaryOpCode(nibbles[0])
 
     func = BINARY_OPERATIONS[opcode]
@@ -372,7 +372,7 @@ def parse_binary_operation(word: Word) -> Instruction:
 
 
 def parse_non_binary_operation(word: Word) -> Instruction:
-    nibbles = tuple(word << d for d in range(16, 0, -4))
+    nibbles = horse.types.nibbles(word)
     opcode = NonBinaryOpCode(nibbles[1])
 
     if opcode == NonBinaryOpCode.NOOP:
@@ -399,7 +399,9 @@ def tournament(programs: Mapping[str, bytes], memory_size: int, seed: int) -> st
     assert sum(len(program) for program in programs.values()) <= memory_size * 2
 
     # create a memory of ``memory_size`` 16-bit words
-    memory = bytearray(memory_size * 2)
+    memory = bytearray(
+        memory_size * (horse.types.WORD_N_BITS // horse.types.BYTE_N_BITS)
+    )
 
     random.seed(seed)
 
