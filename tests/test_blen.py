@@ -1,3 +1,5 @@
+import collections
+
 import hypothesis
 import hypothesis.strategies as st
 
@@ -15,6 +17,14 @@ in_range_signed_integers = st.integers(MIN_SIGNED_INT, MAX_SIGNED_INT)
 
 binary_operations = st.sampled_from(tuple(horse.blen.BINARY_OPERATIONS.values()))
 unary_operations = st.sampled_from(tuple(horse.blen.UNARY_OPERATIONS.values()))
+
+machines = st.builds(
+    horse.blen.Machine,
+    registers=st.fixed_dictionaries(
+        {register: words for register in horse.blen.Register}
+    ),
+)
+memories = st.dictionaries(words, words).map(lambda d: collections.defaultdict(int, d))
 
 
 @hypothesis.given(words)
@@ -64,3 +74,14 @@ def test_decrement_non_overflow(operand):
     true_result = operand - 1
     if MIN_SIGNED_INT <= true_result <= MAX_SIGNED_INT:
         assert result == horse.blen.signed_integer_to_word(true_result)
+
+
+@hypothesis.given(words)
+def test_parse_defined_for_all_words(word):
+    assert isinstance(horse.blen.parse(word), horse.blen.Instruction)
+
+
+@hypothesis.given(machines, memories)
+def test_register_zero_always_zero(machine, memory):
+    machine.tick(memory)
+    assert machine.registers[horse.blen.Register.ZERO_REGISTER] == 0

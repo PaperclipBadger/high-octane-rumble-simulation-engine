@@ -1,14 +1,12 @@
 from typing import (
     Callable,
+    Iterator,
     Mapping,
     MutableMapping,
     NewType,
     Protocol,
-    Sequence,
-    Type,
-    TypeVar,
-    Union,
 )
+import typing
 
 import dataclasses
 import enum
@@ -16,13 +14,31 @@ import operator
 import random
 
 
-from horse.types import Word, Byte, Nibble
+from horse.types import Word
 import horse.types
 
 
-Register = NewType("Register", int)
-ZERO_REGISTER = Register(0)
-PROGRAM_COUNTER = Register(1)
+class Register(enum.Enum):
+    R0 = 0
+    R1 = 1
+    R2 = 2
+    R3 = 3
+    R4 = 4
+    R5 = 5
+    R6 = 6
+    R7 = 7
+    R8 = 8
+    R9 = 9
+    R10 = 10
+    R11 = 11
+    R12 = 12
+    R13 = 13
+    R14 = 14
+    R15 = 15
+
+    ZERO_REGISTER = 0
+    PROGRAM_COUNTER = 1
+
 
 Address = NewType("Address", Word)
 Memory = MutableMapping[Address, Word]
@@ -96,22 +112,55 @@ def signed_integer_to_word(signed_integer: SignedInteger, /) -> Word:
 
 
 @dataclasses.dataclass
+class RegisterMappingWrapper(MutableMapping[Register, Word]):
+    wrapped_mapping: MutableMapping[Register, Word]
+
+    def __post_init__(self):
+        self.wrapped_mapping[Register.ZERO_REGISTER] = 0
+
+    def __getitem__(self, key: Register) -> Word:
+        return self.wrapped_mapping[key]
+
+    def __setitem__(self, key: Register, value: Word) -> None:
+        if key != Register.ZERO_REGISTER:
+            self.wrapped_mapping[key] = value
+
+    def __delitem__(self, key: Register) -> None:
+        if key != Register.ZERO_REGISTER:
+            del self.wrapped_mapping[key]
+
+    def __len__(self) -> int:
+        return len(self.wrapped_mapping)
+
+    def __iter__(self) -> Iterator[Register]:
+        return iter(self.wrapped_mapping)
+
+
+@dataclasses.dataclass
 class Machine:
     name: str
-    registers: MutableMapping[Register, Word]
+    registers: MutableMapping[Register, Word] = dataclasses.field(
+        default_factory=lambda: {register: Word(0) for register in Register}
+    )
     halted: bool = False
 
+    def __post_init__(self) -> None:
+        self.registers = RegisterMappingWrapper(self.registers)
+
     def tick(self, memory: Memory) -> None:
-        instruction_address = Address(self.registers[PROGRAM_COUNTER])
+        instruction_address = Address(self.registers[Register.PROGRAM_COUNTER])
         instruction_as_word = memory[instruction_address]
         instruction = parse(instruction_as_word)
 
         instruction(self, memory)
 
         if not self.halted:
-            UnaryOperation(increment, PROGRAM_COUNTER, PROGRAM_COUNTER)(self, memory)
+            UnaryOperation(
+                increment, Register.PROGRAM_COUNTER, Register.PROGRAM_COUNTER
+            )(self, memory)
 
 
+@typing.runtime_checkable
 class Instruction(Protocol):
     def __call__(self, machine: Machine, memory: Memory) -> None:
         raise NotImplementedError
@@ -347,8 +396,13 @@ UNARY_OPERATIONS = {
 
 
 def parse(word: Word) -> Instruction:
-    nibbles = horse.types.nibbles(word)
-    opcode = BinaryOpCode(nibbles[0])
+    nibbles = horse.types.word_to_nibbles(word)
+
+    try:
+        opcode = BinaryOpCode(nibbles[0])
+    except ValueError:
+        # undefined opcode
+        return Halt()
 
     if opcode == BinaryOpCode.NON_BINARY_OPERATION:
         return parse_non_binary_operation(word)
@@ -357,12 +411,14 @@ def parse(word: Word) -> Instruction:
         source = Register(nibbles[2])
         target = Register(nibbles[3])
         return CopyIf(register_to_test, source, target)
-    else:
+    elif opcode in BINARY_OPERATIONS:
         return parse_binary_operation(word)
+    else:
+        assert False, "This should never happen."
 
 
 def parse_binary_operation(word: Word) -> Instruction:
-    nibbles = horse.types.nibbles(word)
+    nibbles = horse.types.word_to_nibbles(word)
     opcode = BinaryOpCode(nibbles[0])
 
     func = BINARY_OPERATIONS[opcode]
@@ -374,8 +430,13 @@ def parse_binary_operation(word: Word) -> Instruction:
 
 
 def parse_non_binary_operation(word: Word) -> Instruction:
-    nibbles = horse.types.nibbles(word)
-    opcode = NonBinaryOpCode(nibbles[1])
+    nibbles = horse.types.word_to_nibbles(word)
+
+    try:
+        opcode = NonBinaryOpCode(nibbles[1])
+    except ValueError:
+        # undefined opcode
+        return Halt()
 
     if opcode == NonBinaryOpCode.NOOP:
         return NoOp()
@@ -389,11 +450,13 @@ def parse_non_binary_operation(word: Word) -> Instruction:
         address = Register(nibbles[2])
         source = Register(nibbles[3])
         return Store(address, source)
-    else:
+    elif opcode in UNARY_OPERATIONS:
         func = UNARY_OPERATIONS[opcode]
         operand = Register(nibbles[2])
         result = Register(nibbles[3])
         return UnaryOperation(func, operand, result)
+    else:
+        assert False, "This should never happen."
 
 
 def tournament(programs: Mapping[str, bytes], memory_size: int, seed: int) -> str:
@@ -401,7 +464,7 @@ def tournament(programs: Mapping[str, bytes], memory_size: int, seed: int) -> st
     assert sum(len(program) for program in programs.values()) <= memory_size * 2
 
     # create a memory of ``memory_size`` 16-bit words
-    memory = bytearray(
+    memory = bytearray(  # noqa: F841
         memory_size * (horse.types.WORD_N_BITS // horse.types.BYTE_N_BITS)
     )
 

@@ -17,5 +17,20 @@ TRUE = Word(MAX_WORD)
 FALSE = Word(0)
 
 
-def nibbles(word: Word, /) -> Sequence[Nibble]:
-    return tuple(Nibble(word << d) for d in range(WORD_N_BITS, 0, -NIBBLE_N_BITS))
+def word_to_nibbles(word: Word, /) -> Sequence[Nibble]:
+    return tuple(
+        Nibble(word >> d & ((1 << NIBBLE_N_BITS) - 1))
+        for d in range(WORD_N_BITS - NIBBLE_N_BITS, 0 - NIBBLE_N_BITS, -NIBBLE_N_BITS)
+    )
+
+
+def nibbles_to_word(nibbles: Sequence[Nibble], /) -> Word:
+    return Word(
+        sum(
+            nibble << d
+            for nibble, d in zip(
+                nibbles,
+                range(WORD_N_BITS - NIBBLE_N_BITS, 0 - NIBBLE_N_BITS, -NIBBLE_N_BITS),
+            )
+        )
+    )
