@@ -31,11 +31,15 @@ SignedInteger = NewType("SignedInteger", int)
 
 
 def word_to_signed_integer(word: Word, /) -> SignedInteger:
-    return SignedInteger(word - (1 << horse.types.WORD_N_BITS))
+    if word >= (1 << (horse.types.WORD_N_BITS - 1)):
+        return SignedInteger(word - (1 << horse.types.WORD_N_BITS))
+    else:
+        return SignedInteger(word)
 
 
 def signed_integer_to_word(signed_integer: SignedInteger, /) -> Word:
-    return Word((1 << horse.types.WORD_N_BITS) - signed_integer)
+    flowed = signed_integer % (1 << horse.types.WORD_N_BITS)
+    return Word(flowed)
 
 
 # TODO: these don't typecheck and also I don't use them yet
@@ -231,32 +235,32 @@ def bitwise_xor(operand0: Word, operand1: Word, /) -> Word:
 
 def _signed_binop(
     func: Callable[[SignedInteger, SignedInteger], SignedInteger],
-    operand0: Word,
-    operand1: Word,
-) -> Word:
-    return signed_integer_to_word(
-        func(word_to_signed_integer(operand0), word_to_signed_integer(operand1))
-    )
+) -> Callable[[Word, Word], Word]:
+    def signed_binop(operand0: Word, operand1: Word, /, func=func):
+        return signed_integer_to_word(
+            func(word_to_signed_integer(operand0), word_to_signed_integer(operand1))
+        )
+
+    return signed_binop
 
 
-def add(operand0: Word, operand1: Word, /) -> Word:
-    return _signed_binop(operator.add, operand0, operand1)
-
-
-def subtract(operand0: Word, operand1: Word, /) -> Word:
-    return _signed_binop(operator.sub, operand0, operand1)
-
-
-def multiply(operand0: Word, operand1: Word, /) -> Word:
-    return _signed_binop(operator.mul, operand0, operand1)
+add = _signed_binop(operator.add)
+subtract = _signed_binop(operator.sub)
+multiply = _signed_binop(operator.mul)
 
 
 def floor_divide(operand0: Word, operand1: Word, /) -> Word:
-    return _signed_binop(operator.floordiv, operand0, operand1)
+    try:
+        return _signed_binop(operator.floordiv)(operand0, operand1)
+    except ZeroDivisionError:
+        return Word(0)
 
 
 def modulus(operand0: Word, operand1: Word, /) -> Word:
-    return _signed_binop(operator.mod, operand0, operand1)
+    try:
+        return _signed_binop(operator.mod)(operand0, operand1)
+    except ZeroDivisionError:
+        return Word(0)
 
 
 def left_shift(operand0: Word, operand1: Word, /) -> Word:
@@ -318,20 +322,18 @@ def convert_to_bool(operand: Word, /) -> Word:
     return Word((1 << horse.types.WORD_N_BITS) - 1 if operand else 0)
 
 
-def bitwise_not(operand: Word, /) -> Word:
-    return Word(~operand)
+def _signed_unop(
+    func: Callable[[SignedInteger], SignedInteger]
+) -> Callable[[Word], Word]:
+    def signed_unop(operand: Word, /, func=func) -> Word:
+        return signed_integer_to_word(func(word_to_signed_integer(operand)))
+
+    return signed_unop
 
 
-def _signed_unop(func: Callable[[SignedInteger], SignedInteger], operand: Word) -> Word:
-    return signed_integer_to_word(func(word_to_signed_integer(operand)))
-
-
-def negate(operand: Word, /) -> Word:
-    return _signed_unop(operator.neg, operand)
-
-
-def posit(operand: Word, /) -> Word:
-    return _signed_unop(operator.pos, operand)
+bitwise_not = _signed_unop(operator.invert)
+negate = _signed_unop(operator.neg)
+posit = _signed_unop(operator.pos)
 
 
 UNARY_OPERATIONS = {
