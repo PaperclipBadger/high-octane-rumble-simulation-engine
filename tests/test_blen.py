@@ -27,3 +27,19 @@ def test_binary_operations_return_words(func, operand0, operand1):
 @hypothesis.given(unary_operations, words)
 def test_unary_operations_return_words(func, operand):
     assert 0 <= func(operand) <= horse.types.MAX_WORD
+
+
+@hypothesis.given(
+    st.sampled_from((horse.blen.test_equal, horse.blen.test_greater_than)),
+    words,
+    words,
+)
+def test_comparison_functions_returns_bool_values(func, operand0, operand1):
+    result = func(operand0, operand1)
+    assert result == horse.types.TRUE or result == horse.types.FALSE
+
+
+@hypothesis.given(words)
+def test_convert_to_bool_returns_bool_values(operand):
+    result = horse.blen.convert_to_bool(operand)
+    assert result == horse.types.TRUE or result == horse.types.FALSE

@@ -319,7 +319,7 @@ def decrement(operand: Word, /) -> Word:
 
 
 def convert_to_bool(operand: Word, /) -> Word:
-    return Word((1 << horse.types.WORD_N_BITS) - 1 if operand else 0)
+    return Word(horse.types.TRUE if operand else horse.types.FALSE)
 
 
 def _signed_unop(
