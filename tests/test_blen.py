@@ -18,13 +18,14 @@ in_range_signed_integers = st.integers(MIN_SIGNED_INT, MAX_SIGNED_INT)
 binary_operations = st.sampled_from(tuple(horse.blen.BINARY_OPERATIONS.values()))
 unary_operations = st.sampled_from(tuple(horse.blen.UNARY_OPERATIONS.values()))
 
+memories = st.dictionaries(words, words).map(lambda d: collections.defaultdict(int, d))
 machines = st.builds(
     horse.blen.Machine,
+    memory=memories,
     registers=st.fixed_dictionaries(
         {register: words for register in horse.blen.Register}
     ),
 )
-memories = st.dictionaries(words, words).map(lambda d: collections.defaultdict(int, d))
 
 
 @hypothesis.given(words)
@@ -81,7 +82,7 @@ def test_parse_defined_for_all_words(word):
     assert isinstance(horse.blen.parse(word), horse.blen.Instruction)
 
 
-@hypothesis.given(machines, memories)
-def test_register_zero_always_zero(machine, memory):
-    machine.tick(memory)
+@hypothesis.given(machines)
+def test_register_zero_always_zero(machine):
+    machine.tick()
     assert machine.registers[horse.blen.Register.ZERO_REGISTER] == 0

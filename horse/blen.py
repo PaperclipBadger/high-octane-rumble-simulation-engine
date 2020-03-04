@@ -139,6 +139,7 @@ class RegisterMappingWrapper(MutableMapping[Register, Word]):
 @dataclasses.dataclass
 class Machine:
     name: str
+    memory: MutableMapping[Address, Word]
     registers: MutableMapping[Register, Word] = dataclasses.field(
         default_factory=lambda: {register: Word(0) for register in Register}
     )
@@ -147,32 +148,32 @@ class Machine:
     def __post_init__(self) -> None:
         self.registers = RegisterMappingWrapper(self.registers)
 
-    def tick(self, memory: Memory) -> None:
+    def tick(self) -> None:
         instruction_address = Address(self.registers[Register.PROGRAM_COUNTER])
-        instruction_as_word = memory[instruction_address]
+        instruction_as_word = self.memory[instruction_address]
         instruction = parse(instruction_as_word)
 
-        instruction(self, memory)
+        instruction(self)
 
         if not self.halted:
             UnaryOperation(
                 increment, Register.PROGRAM_COUNTER, Register.PROGRAM_COUNTER
-            )(self, memory)
+            )(self)
 
 
 @typing.runtime_checkable
 class Instruction(Protocol):
-    def __call__(self, machine: Machine, memory: Memory) -> None:
+    def __call__(self, machine: Machine) -> None:
         raise NotImplementedError
 
 
 class NoOp(Instruction):
-    def __call__(self, machine: Machine, memory: Memory) -> None:
+    def __call__(self, machine: Machine) -> None:
         pass
 
 
 class Halt(Instruction):
-    def __call__(self, machine: Machine, memory: Memory) -> None:
+    def __call__(self, machine: Machine) -> None:
         machine.halted = True
 
 
@@ -181,9 +182,9 @@ class Load(Instruction):
     address: Register
     target: Register
 
-    def __call__(self, machine: Machine, memory: Memory) -> None:
+    def __call__(self, machine: Machine) -> None:
         address = Address(machine.registers[self.address])
-        machine.registers[self.target] = memory[address]
+        machine.registers[self.target] = machine.memory[address]
 
 
 @dataclasses.dataclass
@@ -191,9 +192,9 @@ class Store(Instruction):
     address: Register
     source: Register
 
-    def __call__(self, machine: Machine, memory: Memory) -> None:
+    def __call__(self, machine: Machine) -> None:
         address = Address(machine.registers[self.address])
-        memory[address] = machine.registers[self.source]
+        machine.memory[address] = machine.registers[self.source]
 
 
 @dataclasses.dataclass
@@ -202,7 +203,7 @@ class CopyIf(Instruction):
     source: Register
     target: Register
 
-    def __call__(self, machine: Machine, memory: Memory) -> None:
+    def __call__(self, machine: Machine) -> None:
         if machine.registers[self.register_to_test]:
             machine.registers[self.source] = machine.registers[self.target]
 
@@ -218,7 +219,7 @@ class BinaryOperation(Instruction):
     operand1: Register
     result: Register
 
-    def __call__(self, machine: Machine, memory: Memory) -> None:
+    def __call__(self, machine: Machine) -> None:
         machine.registers[self.result] = self.func(
             machine.registers[self.operand0], machine.registers[self.operand1],
         )
@@ -234,7 +235,7 @@ class UnaryOperation(Instruction):
     operand: Register
     result: Register
 
-    def __call__(self, machine: Machine, memory: Memory) -> None:
+    def __call__(self, machine: Machine) -> None:
         machine.registers[self.result] = self.func(machine.registers[self.operand])
 
 
@@ -459,18 +460,49 @@ def parse_non_binary_operation(word: Word) -> Instruction:
         assert False, "This should never happen."
 
 
-def tournament(programs: Mapping[str, bytes], memory_size: int, seed: int) -> str:
-    """Runs a tournament and determines the winner."""
-    assert sum(len(program) for program in programs.values()) <= memory_size * 2
+@dataclasses.dataclass
+class VirtualMemory(MutableMapping[Address, Word]):
+    offset: int
+    real_memory: MutableMapping[Address, Word]
 
-    # create a memory of ``memory_size`` 16-bit words
-    memory = bytearray(  # noqa: F841
-        memory_size * (horse.types.WORD_N_BITS // horse.types.BYTE_N_BITS)
-    )
+    def __repr__(self):
+        return f"{self.__class__.__name__}(offset={self.offset}, real_memory=...)"
+
+    def real_address(self, virtual_address: Address) -> Address:
+        return Address(
+            Word((virtual_address + self.offset) % (1 << horse.types.WORD_N_BITS))
+        )
+
+    def __getitem__(self, virtual_address: Address) -> Word:
+        return self.real_memory[self.real_address(virtual_address)]
+
+    def __setitem__(self, virtual_address: Address, value: Word) -> None:
+        self.real_memory[self.real_address(virtual_address)] = value
+
+    def __delitem__(self, virtual_address: Address) -> None:
+        del self.real_memory[self.real_address(virtual_address)]
+
+    def __len__(self) -> int:
+        return len(self.real_memory)
+
+    def __iter__(self) -> Iterator[Address]:
+        return iter(self.real_memory)
+
+
+def tournament(programs: Mapping[str, bytes], seed: int) -> str:
+    """Runs a tournament and determines the winner."""
+    memory = {Address(Word(i)): Word(0) for i in range(1 << horse.types.WORD_N_BITS)}
 
     random.seed(seed)
 
+    offsets = [0 for program in programs]
     for program in programs:
         pass
+
+    # create machines
+    machines = [  # noqa: F841
+        Machine(name, memory=VirtualMemory(offset, memory))
+        for name, offset in zip(programs, offsets)
+    ]
 
     return "it was a draw"
