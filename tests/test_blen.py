@@ -8,6 +8,11 @@ import horse.types
 words = st.integers(0, horse.types.MAX_WORD)
 bytes = st.integers(0, horse.types.MAX_BYTE)
 nibbles = st.integers(0, horse.types.MAX_NIBBLE)
+
+MIN_SIGNED_INT = -(1 << horse.types.WORD_N_BITS - 1)
+MAX_SIGNED_INT = (1 << horse.types.WORD_N_BITS - 1) - 1
+in_range_signed_integers = st.integers(MIN_SIGNED_INT, MAX_SIGNED_INT)
+
 binary_operations = st.sampled_from(tuple(horse.blen.BINARY_OPERATIONS.values()))
 unary_operations = st.sampled_from(tuple(horse.blen.UNARY_OPERATIONS.values()))
 
@@ -43,3 +48,19 @@ def test_comparison_functions_returns_bool_values(func, operand0, operand1):
 def test_convert_to_bool_returns_bool_values(operand):
     result = horse.blen.convert_to_bool(operand)
     assert result == horse.types.TRUE or result == horse.types.FALSE
+
+
+@hypothesis.given(in_range_signed_integers)
+def test_increment_non_overflow(operand):
+    result = horse.blen.increment(horse.blen.signed_integer_to_word(operand))
+    true_result = operand + 1
+    if MIN_SIGNED_INT <= true_result <= MAX_SIGNED_INT:
+        assert result == horse.blen.signed_integer_to_word(true_result)
+
+
+@hypothesis.given(in_range_signed_integers)
+def test_decrement_non_overflow(operand):
+    result = horse.blen.decrement(horse.blen.signed_integer_to_word(operand))
+    true_result = operand - 1
+    if MIN_SIGNED_INT <= true_result <= MAX_SIGNED_INT:
+        assert result == horse.blen.signed_integer_to_word(true_result)
