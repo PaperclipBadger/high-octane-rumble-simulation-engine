@@ -1,10 +1,14 @@
 from typing import (
     Callable,
     Iterator,
+    Generic,
     Mapping,
     MutableMapping,
     NewType,
     Protocol,
+    Sequence,
+    TypeVar,
+    Type,
 )
 import typing
 
@@ -12,6 +16,7 @@ import dataclasses
 import enum
 import operator
 import random
+import re
 
 
 from horse.types import Word
@@ -40,6 +45,52 @@ class Register(enum.Enum):
     PROGRAM_COUNTER = 1
 
 
+class BinaryOpCode(enum.Enum):
+    NON_BINARY_OPERATION = 0
+    COPY_IF = 1
+    # 2
+    # 3
+
+    TEST_EQUAL = 4
+    TEST_GREATER_THAN = 5
+
+    BITWISE_AND = 6
+    BITWISE_OR = 7
+    BITWISE_XOR = 8
+
+    ADD = 9
+    SUBTRACT = 10
+    MULTIPLY = 11
+
+    FLOOR_DIVIDE = 12
+    MODULUS = 13
+    LEFT_SHIFT = 14
+    RIGHT_SHIFT = 15
+
+
+class NonBinaryOpCode(enum.Enum):
+    NOOP = 0
+    HALT = 1
+    # 2
+    # 3
+
+    LOAD = 4
+    STORE = 5
+
+    INCREMENT = 6
+    DECREMENT = 7
+
+    CONVERT_TO_BOOL = 8
+    BITWISE_NOT = 9
+    NEGATE = 10
+    POSIT = 11
+
+    # 12
+    # 13
+    # 14
+    # 15
+
+
 Address = NewType("Address", Word)
 Memory = MutableMapping[Address, Word]
 
@@ -58,57 +109,84 @@ def signed_integer_to_word(signed_integer: SignedInteger, /) -> Word:
     return Word(flowed)
 
 
-# TODO: these don't typecheck and also I don't use them yet
-# either uncomment or delete
-#
-# @dataclasses.dataclass
-# class Nibbles(Sequence[Nibble]):
-#     """Wrapper for accessing ``bytearray``s by the 4-bit nibble."""
-#
-#     bytearray: bytearray
-#
-#     def __getitem__(self, index: Union[int, slice], /) -> Nibble:
-#         byte = self.bytearray[index // 2]
-#
-#         if index % 2 == 0:
-#             return Nibble(byte >> 4)
-#         else:
-#             return Nibble(byte % 16)
-#
-#     def __setitem__(self, index: int, item: Nibble, /) -> None:
-#         assert 0 <= item < (1 << 4)
-#
-#         byte = self.bytearray[index // 2]
-#
-#         if index % 2 == 0:
-#             self.bytearray[index // 2] = ((byte >> 4) << 4) + item
-#         else:
-#             self.bytearray[index // 2] = (item << 4) + (byte % 16)
-#
-#     def __len__(self) -> int:
-#         return len(self.bytearray) * 2
-#
-#
-# @dataclasses.dataclass
-# class Words(Sequence[Word]):
-#     """Wrapper for accessing ``bytearray``s by the 16-bit word."""
-#
-#     bytearray: bytearray
-#
-#     def __post_init__(self):
-#         assert len(self.bytearray) % 2 == 0
-#
-#     def __getindex__(self, index: int, /) -> Word:
-#         top, bottom = self.bytearray[index * 2 : index * 2 + 1]
-#         return Word((top << 8) + bottom)
-#
-#     def __setitem__(self, index: int, item: Word, /) -> None:
-#         assert 0 <= item < (1 << 16)
-#         self.bytearray[index] = item // (1 << 8)
-#         self.bytearray[index + 1] = item % (1 << 8)
-#
-#     def __len__(self) -> int:
-#         return len(self.bytearray) // 2
+@dataclasses.dataclass
+class ParserState:
+    lines: Sequence[str]
+    line: int
+    char: int
+
+    @property
+    def remaining(self) -> str:
+        return self.lines[self.line][self.char :]
+
+
+T = TypeVar("T")
+
+
+@dataclasses.dataclass
+class ParseResult(Generic[T]):
+    result: T
+    new_state: ParserState
+
+
+class ParseError(ValueError):
+    def __init__(self, state: ParserState, message):
+        max_line = len(state.lines)
+        max_char = max(len(line) for line in state.lines)
+        super().__init__(
+            f"line {state.line:0{max_line}d}, char {state.char:0{max_char}d}: {message}"
+        )
+
+
+REGISTER_RE = re.compile(r"R\d")
+WHITESPACE_RE = re.compile(r"\s+")
+
+
+def parse_whitespace(current_state: ParserState) -> ParseResult[str]:
+    match = WHITESPACE_RE.match(current_state.remaining)
+    if match is not None:
+        parsed = match.group(0)
+        new_state = dataclasses.replace(
+            current_state, char=current_state.char + len(parsed)
+        )
+        return ParseResult(parsed, new_state)
+    else:
+        raise ParseError(current_state, "expected whitespace")
+
+
+def parse_keyword(keyword: str, current_state: ParserState) -> ParseResult[str]:
+    if current_state.remaining.startswith(keyword):
+        parsed = keyword
+        new_state = dataclasses.replace(
+            current_state, char=current_state.char + len(parsed)
+        )
+        return ParseResult(parsed, new_state)
+    else:
+        raise ParseError(current_state, f"expected keyword {keyword}")
+
+
+def parse_register(current_state: ParserState) -> ParseResult[Register]:
+    match = REGISTER_RE.match(current_state.remaining)
+    if match is not None:
+        parsed = match.group(0)
+        result = horse.blen.Register[parsed]
+        new_state = dataclasses.replace(
+            current_state, char=current_state.char + len(parsed)
+        )
+        return ParseResult(result, new_state)
+    else:
+        raise ParseError(current_state, "expected register")
+
+
+def parse_comment(current_state: ParserState) -> ParseResult[str]:
+    if current_state.remaining.startswith(";"):
+        parsed = current_state.remaining
+        new_state = dataclasses.replace(
+            current_state, line=current_state.line + 1, char=0
+        )
+        return ParseResult(parsed, new_state)
+    else:
+        raise ParseError(current_state, "expected comment")
 
 
 @dataclasses.dataclass
@@ -157,8 +235,13 @@ class Machine:
 
         if not self.halted:
             UnaryOperation(
-                increment, Register.PROGRAM_COUNTER, Register.PROGRAM_COUNTER
+                NonBinaryOpCode.INCREMENT,
+                Register.PROGRAM_COUNTER,
+                Register.PROGRAM_COUNTER,
             )(self)
+
+
+_SelfType = TypeVar("_SelfType", bound="Instruction")
 
 
 @typing.runtime_checkable
@@ -166,15 +249,52 @@ class Instruction(Protocol):
     def __call__(self, machine: Machine) -> None:
         raise NotImplementedError
 
+    @classmethod
+    def parse(
+        cls: Type[_SelfType], current_state: ParserState
+    ) -> ParseResult[_SelfType]:
+        raise NotImplementedError
+
+    def to_word(self) -> Word:
+        raise NotImplementedError
+
 
 class NoOp(Instruction):
     def __call__(self, machine: Machine) -> None:
         pass
 
+    @classmethod
+    def parse(cls, current_state):
+        parse_result = parse_keyword("pass", current_state)
+        return ParseResult(cls(), parse_result.new_state)
+
+    def to_word(self) -> Word:
+        nibbles = [
+            horse.types.Nibble(BinaryOpCode.NON_BINARY_OPERATION.value),
+            horse.types.Nibble(NonBinaryOpCode.NOOP.value),
+            horse.types.Nibble(0),
+            horse.types.Nibble(0),
+        ]
+        return horse.types.nibbles_to_word(nibbles)
+
 
 class Halt(Instruction):
     def __call__(self, machine: Machine) -> None:
         machine.halted = True
+
+    @classmethod
+    def parse(cls, current_state):
+        parse_result = parse_keyword("halt", current_state)
+        return ParseResult(cls(), parse_result.new_state)
+
+    def to_word(self) -> Word:
+        nibbles = [
+            horse.types.Nibble(BinaryOpCode.NON_BINARY_OPERATION.value),
+            horse.types.Nibble(NonBinaryOpCode.HALT.value),
+            horse.types.Nibble(0),
+            horse.types.Nibble(0),
+        ]
+        return horse.types.nibbles_to_word(nibbles)
 
 
 @dataclasses.dataclass
@@ -186,6 +306,32 @@ class Load(Instruction):
         address = Address(machine.registers[self.address])
         machine.registers[self.target] = machine.memory[address]
 
+    @classmethod
+    def parse(cls, current_state):
+        # if only Python had monads, but alas
+        keyword_result = parse_keyword("load", current_state)
+
+        whitespace0_result = parse_whitespace(keyword_result.new_state)
+
+        address_result = parse_register(whitespace0_result.new_state)
+        address = address_result.result
+
+        whitespace1_result = parse_whitespace(address_result.new_state)
+
+        target_result = parse_register(whitespace1_result.new_state)
+        target = target_result.result
+
+        return ParseResult(cls(address, target), target_result.new_state)
+
+    def to_word(self) -> Word:
+        nibbles = [
+            horse.types.Nibble(BinaryOpCode.NON_BINARY_OPERATION.value),
+            horse.types.Nibble(NonBinaryOpCode.LOAD.value),
+            horse.types.Nibble(self.address.value),
+            horse.types.Nibble(self.target.value),
+        ]
+        return horse.types.nibbles_to_word(nibbles)
+
 
 @dataclasses.dataclass
 class Store(Instruction):
@@ -195,6 +341,32 @@ class Store(Instruction):
     def __call__(self, machine: Machine) -> None:
         address = Address(machine.registers[self.address])
         machine.memory[address] = machine.registers[self.source]
+
+    @classmethod
+    def parse(cls, current_state):
+        # if only Python had monads, but alas
+        keyword_result = parse_keyword("store", current_state)
+
+        whitespace0_result = parse_whitespace(keyword_result.new_state)
+
+        address_result = parse_register(whitespace0_result.new_state)
+        address = address_result.result
+
+        whitespace1_result = parse_whitespace(address_result.new_state)
+
+        source_result = parse_register(whitespace1_result.new_state)
+        source = source_result.result
+
+        return ParseResult(cls(address, source), source_result.new_state)
+
+    def to_word(self) -> Word:
+        nibbles = [
+            horse.types.Nibble(BinaryOpCode.NON_BINARY_OPERATION.value),
+            horse.types.Nibble(NonBinaryOpCode.STORE.value),
+            horse.types.Nibble(self.address.value),
+            horse.types.Nibble(self.source.value),
+        ]
+        return horse.types.nibbles_to_word(nibbles)
 
 
 @dataclasses.dataclass
@@ -207,59 +379,138 @@ class CopyIf(Instruction):
         if machine.registers[self.register_to_test]:
             machine.registers[self.source] = machine.registers[self.target]
 
+    @classmethod
+    def parse(cls, current_state):
+        # if only Python had monads, but alas
+        keyword_result = parse_keyword("copy_if", current_state)
+
+        whitespace0_result = parse_whitespace(keyword_result.new_state)
+
+        register_to_test_result = parse_register(whitespace0_result.new_state)
+        register_to_test = register_to_test_result.result
+
+        whitespace1_result = parse_whitespace(register_to_test_result.new_state)
+
+        source_result = parse_register(whitespace1_result.new_state)
+        source = source_result.result
+
+        whitespace2_result = parse_whitespace(source_result.new_state)
+
+        target_result = parse_register(whitespace2_result.new_state)
+        target = target_result.result
+
+        return ParseResult(
+            cls(register_to_test, source, target), target_result.new_state
+        )
+
+    def to_word(self) -> Word:
+        nibbles = [
+            horse.types.Nibble(BinaryOpCode.COPY_IF.value),
+            horse.types.Nibble(self.register_to_test.value),
+            horse.types.Nibble(self.source.value),
+            horse.types.Nibble(self.target.value),
+        ]
+        return horse.types.nibbles_to_word(nibbles)
+
 
 @dataclasses.dataclass
 class BinaryOperation(Instruction):
-    class _WrappedFunction(Protocol):
-        def __call__(self, operand0: Word, operand1: Word, /) -> Word:
-            ...
-
-    func: _WrappedFunction
+    opcode: BinaryOpCode
     operand0: Register
     operand1: Register
     result: Register
 
     def __call__(self, machine: Machine) -> None:
-        machine.registers[self.result] = self.func(
+        func = BINARY_OPERATIONS[self.opcode]
+        machine.registers[self.result] = func(
             machine.registers[self.operand0], machine.registers[self.operand1],
         )
+
+    @classmethod
+    def parse(cls, current_state):
+        # if only Python had monads, but alas
+        for opcode in BINARY_OPERATIONS:
+            try:
+                keyword_result = parse_keyword(opcode.name.lower(), current_state)
+            except ParseError:
+                continue
+            else:
+                break
+        else:
+            raise ParseError(current_state, "expected binary op keyword")
+
+        whitespace0_result = parse_whitespace(keyword_result.new_state)
+
+        operand0_result = parse_register(whitespace0_result.new_state)
+        operand0 = operand0_result.result
+
+        whitespace1_result = parse_whitespace(operand0_result.new_state)
+
+        operand1_result = parse_register(whitespace1_result.new_state)
+        operand1 = operand1_result.result
+
+        whitespace2_result = parse_whitespace(operand1_result.new_state)
+
+        result_result = parse_register(whitespace2_result.new_state)
+        result = result_result.result
+
+        return ParseResult(
+            cls(opcode, operand0, operand1, result), result_result.new_state
+        )
+
+    def to_word(self) -> Word:
+        nibbles = [
+            horse.types.Nibble(self.opcode.value),
+            horse.types.Nibble(self.operand0.value),
+            horse.types.Nibble(self.operand1.value),
+            horse.types.Nibble(self.result.value),
+        ]
+        return horse.types.nibbles_to_word(nibbles)
 
 
 @dataclasses.dataclass
 class UnaryOperation(Instruction):
-    class _WrappedFunction(Protocol):
-        def __call__(self, operand: Word, /) -> Word:
-            ...
-
-    func: _WrappedFunction
+    opcode: NonBinaryOpCode
     operand: Register
     result: Register
 
     def __call__(self, machine: Machine) -> None:
-        machine.registers[self.result] = self.func(machine.registers[self.operand])
+        func = UNARY_OPERATIONS[self.opcode]
+        machine.registers[self.result] = func(machine.registers[self.operand])
 
+    @classmethod
+    def parse(cls, current_state):
+        # if only Python had monads, but alas
+        for opcode in UNARY_OPERATIONS:
+            try:
+                keyword_result = parse_keyword(opcode.name.lower(), current_state)
+            except ParseError:
+                continue
+            else:
+                break
+        else:
+            raise ParseError(current_state, "expected unary op keyword")
 
-class BinaryOpCode(enum.Enum):
-    NON_BINARY_OPERATION = 0
-    COPY_IF = 1
-    # 2
-    # 3
+        whitespace0_result = parse_whitespace(keyword_result.new_state)
 
-    TEST_EQUAL = 4
-    TEST_GREATER_THAN = 5
+        operand_result = parse_register(whitespace0_result.new_state)
+        operand = operand_result.result
 
-    BITWISE_AND = 6
-    BITWISE_OR = 7
-    BITWISE_XOR = 8
+        whitespace1_result = parse_whitespace(operand_result.new_state)
 
-    ADD = 9
-    SUBTRACT = 10
-    MULTIPLY = 11
+        result_result = parse_register(whitespace1_result.new_state)
+        result = result_result.result
 
-    FLOOR_DIVIDE = 12
-    MODULUS = 13
-    LEFT_SHIFT = 14
-    RIGHT_SHIFT = 15
+        return ParseResult(cls(opcode, operand, result), result_result.new_state)
+
+    def to_word(self) -> Word:
+        nibbles = [
+            horse.types.Nibble(BinaryOpCode.NON_BINARY_OPERATION.value),
+            horse.types.Nibble(self.opcode.value),
+            horse.types.Nibble(self.operand.value),
+            horse.types.Nibble(self.result.value),
+        ]
+        return horse.types.nibbles_to_word(nibbles)
 
 
 def test_equal(operand0: Word, operand1: Word, /) -> Word:
@@ -337,29 +588,6 @@ BINARY_OPERATIONS = {
 }
 
 
-class NonBinaryOpCode(enum.Enum):
-    NOOP = 0
-    HALT = 1
-    # 2
-    # 3
-
-    LOAD = 4
-    STORE = 5
-
-    INCREMENT = 6
-    DECREMENT = 7
-
-    CONVERT_TO_BOOL = 8
-    BITWISE_NOT = 9
-    NEGATE = 10
-    POSIT = 11
-
-    # 12
-    # 13
-    # 14
-    # 15
-
-
 def increment(operand: Word, /) -> Word:
     return add(operand, Word(1))
 
@@ -422,12 +650,11 @@ def parse_binary_operation(word: Word) -> Instruction:
     nibbles = horse.types.word_to_nibbles(word)
     opcode = BinaryOpCode(nibbles[0])
 
-    func = BINARY_OPERATIONS[opcode]
     operand0 = Register(nibbles[1])
     operand1 = Register(nibbles[2])
     result = Register(nibbles[3])
 
-    return BinaryOperation(func, operand0, operand1, result)
+    return BinaryOperation(opcode, operand0, operand1, result)
 
 
 def parse_non_binary_operation(word: Word) -> Instruction:
@@ -452,10 +679,9 @@ def parse_non_binary_operation(word: Word) -> Instruction:
         source = Register(nibbles[3])
         return Store(address, source)
     elif opcode in UNARY_OPERATIONS:
-        func = UNARY_OPERATIONS[opcode]
         operand = Register(nibbles[2])
         result = Register(nibbles[3])
-        return UnaryOperation(func, operand, result)
+        return UnaryOperation(opcode, operand, result)
     else:
         assert False, "This should never happen."
 

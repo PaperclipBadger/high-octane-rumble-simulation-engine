@@ -32,6 +32,9 @@ r2-r15 - general purpose int registers
 Instructions:
 =============
 
+1. ``pass``: does nothing
+2. ``halt``: ends the program (avoid if possible)
+
 1. This is a 'unary instruction', inspect second 4-bit chunk
 2. ``copyif a b c`` if a nonzero copy b to c
 3. ``eq a b c``
