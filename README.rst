@@ -6,6 +6,31 @@ It's a fight to the death!
 
 .. contents::
 
+----------
+How to use
+----------
+
+Start by installing poetry: https://python-poetry.org/
+
+Install the project dependencies:
+
+.. code::
+
+    poetry install
+
+Run the unit tests:
+
+.. code::
+
+    poetry run pytest
+
+Compile a program:
+
+.. code::
+
+    poetry run python -m horse.compiler --input program.blen --output program.blenc
+
+
 ---------------------
 The ``blen`` language
 ---------------------
