@@ -106,10 +106,11 @@ def parse_register(current_state: ParserState) -> ParseResult[horse.blen.Registe
 
 
 def parse_comment(current_state: ParserState) -> ParseResult[str]:
-    if current_state.remaining.startswith(";"):
-        parsed = current_state.remaining
+    remaining_line = current_state.lines[current_state.line][current_state.char :]
+    if remaining_line.startswith(";"):
+        parsed = remaining_line
         new_state = dataclasses.replace(
-            current_state, line=current_state.line + 1, char=0
+            current_state, char=current_state.char + len(parsed)
         )
         return ParseResult(parsed, new_state)
     else:
@@ -339,18 +340,20 @@ def compile(lines: Sequence[str]) -> Sequence[Word]:
                         raise ParseError(
                             state, "expected instruction or comment or blank line"
                         )
+                    state = dataclasses.replace(state, line=state.line + 1, char=0)
+                    continue
                 except ParseError:
                     raise e
-        else:
-            _result = maybe_parse_whitespace(instruction_result.new_state)
-            _result = maybe_parse_comment(_result.new_state)
-            if _result.new_state.remaining:
-                raise ParseError(
-                    instruction_result.new_state, "expected comment or end of line"
-                )
 
-            compiled.append(compiled_line)
-            state = dataclasses.replace(state, line=state.line + 1, char=0)
+        _result = maybe_parse_whitespace(instruction_result.new_state)
+        _result = maybe_parse_comment(_result.new_state)
+        if _result.new_state.remaining.strip():
+            raise ParseError(
+                instruction_result.new_state, "expected comment or end of line"
+            )
+
+        compiled.append(compiled_line)
+        state = dataclasses.replace(state, line=state.line + 1, char=0)
 
     return compiled
 

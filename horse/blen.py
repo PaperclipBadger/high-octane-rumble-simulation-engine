@@ -9,6 +9,7 @@ import typing
 
 import dataclasses
 import enum
+import logging
 import operator
 
 from horse.types import Word
@@ -137,12 +138,23 @@ class Machine:
 
     def __post_init__(self) -> None:
         self.registers = RegisterMappingWrapper(self.registers)
+        self.logger = logging.getLogger(self.name)
+        self.logger.setLevel(logging.INFO)
+        handler = logging.FileHandler(self.name + ".log")
+        handler.setFormatter(logging.Formatter("%(message)s"))
+        self.logger.addHandler(handler)
 
     def tick(self) -> None:
         instruction_address = Address(self.registers[Register.PROGRAM_COUNTER])
+
+        self.logger.info(
+            "loading instruction at address {}".format(instruction_address)
+        )
         instruction_as_word = self.memory[instruction_address]
         instruction = parse(instruction_as_word)
 
+        self.logger.info("executing instruction {}".format(instruction))
+        instruction_as_word = self.memory[instruction_address]
         instruction(self)
 
         if not self.halted:
@@ -162,6 +174,7 @@ class Instruction(Protocol):
         raise NotImplementedError
 
 
+@dataclasses.dataclass
 class NoOp(Instruction):
     def __call__(self, machine: Machine) -> None:
         pass
@@ -176,6 +189,7 @@ class NoOp(Instruction):
         return horse.types.nibbles_to_word(nibbles)
 
 
+@dataclasses.dataclass
 class Halt(Instruction):
     def __call__(self, machine: Machine) -> None:
         machine.halted = True

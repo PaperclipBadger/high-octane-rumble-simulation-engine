@@ -1,4 +1,4 @@
-from typing import Mapping, MutableMapping, Iterator, Sequence
+from typing import Dict, Mapping, MutableMapping, Iterator, Sequence
 from horse.blen import Address
 from horse.types import Word
 
@@ -50,7 +50,21 @@ def tournament(
     random.seed(seed)
 
     # copy programs into memory
-    offsets = {program: 0 for program in programs}
+    offsets: Dict[str, int] = {}
+
+    for program in programs:
+        for _ in range(100000):
+            offset = random.randrange(0, 1 << horse.types.WORD_N_BITS)
+
+            if not any(
+                offset <= other < offset + len(programs[program])
+                for other in offsets.values()
+            ):
+                break
+        else:
+            raise RuntimeError("couldn't fit programs in memory")
+
+        offsets[program] = offset
 
     for program in programs:
         for i, instruction in enumerate(programs[program]):
@@ -87,7 +101,7 @@ def read_program(filename: str) -> Sequence[Word]:
     with open(filename, "rb") as f:
         contents = f.read()
 
-    return [Word(i) for i, in struct.iter_unpack("<H", contents)]
+    return [Word(i) for i, in struct.iter_unpack(">H", contents)]
 
 
 def main(arguments=None):
