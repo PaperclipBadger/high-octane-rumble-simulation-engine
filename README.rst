@@ -30,6 +30,12 @@ Compile a program:
 
     poetry run python -m horse.compiler --input program.blen --output program.blenc
 
+Run a tournament!
+
+.. code::
+
+    poetry run python -m horse.tournament jess.blenc blaine.blenc
+
 
 ---------------------
 The ``blen`` language
