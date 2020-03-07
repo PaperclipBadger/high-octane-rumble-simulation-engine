@@ -45,8 +45,9 @@ class ParseError(ValueError):
         super().__init__(msg)
 
 
-REGISTER_RE = re.compile(r"R\d")
+REGISTER_RE = re.compile(r"(R\d+|ZERO_REGISTER|PROGRAM_COUNTER)")
 WHITESPACE_RE = re.compile(r"\s+")
+INTEGER_RE = re.compile(r"-?\d+")
 
 
 def parse_whitespace(current_state: ParserState) -> ParseResult[str]:
@@ -77,6 +78,18 @@ def parse_keyword(keyword: str, current_state: ParserState) -> ParseResult[str]:
         return ParseResult(parsed, new_state)
     else:
         raise ParseError(current_state, f"expected keyword {keyword}")
+
+
+def parse_integer(current_state: ParserState) -> ParseResult[int]:
+    match = INTEGER_RE.match(current_state.remaining)
+    if match is not None:
+        parsed = match.group(0)
+        new_state = dataclasses.replace(
+            current_state, char=current_state.char + len(parsed)
+        )
+        return ParseResult(int(parsed), new_state)
+    else:
+        raise ParseError(current_state, "expected integer")
 
 
 def parse_register(current_state: ParserState) -> ParseResult[horse.blen.Register]:
@@ -311,16 +324,23 @@ def compile(lines: Sequence[str]) -> Sequence[Word]:
     while state.line < len(state.lines):
         try:
             instruction_result = parse_instruction(state)
+            compiled_line = instruction_result.result.to_word()
         except ParseError as e:
             try:
-                _result = maybe_parse_whitespace(state)
-                _result = maybe_parse_comment(_result.new_state)
-                if _result.new_state.remaining:
-                    raise ParseError(
-                        state, "expected instruction or comment or blank line"
-                    )
+                _result = parse_keyword("constant", state)
+                _result = parse_whitespace(_result.new_state)
+                constant_result = parse_integer(_result.new_state)
+                compiled_line = Word(constant_result.result)
             except ParseError:
-                raise e
+                try:
+                    _result = maybe_parse_whitespace(state)
+                    _result = maybe_parse_comment(_result.new_state)
+                    if _result.new_state.remaining:
+                        raise ParseError(
+                            state, "expected instruction or comment or blank line"
+                        )
+                except ParseError:
+                    raise e
         else:
             _result = maybe_parse_whitespace(instruction_result.new_state)
             _result = maybe_parse_comment(_result.new_state)
@@ -329,7 +349,7 @@ def compile(lines: Sequence[str]) -> Sequence[Word]:
                     instruction_result.new_state, "expected comment or end of line"
                 )
 
-            compiled.append(instruction_result.result.to_word())
+            compiled.append(compiled_line)
             state = dataclasses.replace(state, line=state.line + 1, char=0)
 
     return compiled

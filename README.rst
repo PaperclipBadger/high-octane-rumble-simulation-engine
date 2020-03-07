@@ -191,6 +191,11 @@ The numbers in this list indicate the opcode of the relevant instruction:
 11. ``posit a result``: Treating the number in ``a`` as a signed integer,
     write the absolute value of ``a`` to the ``result`` register.
 
+Miscellaneous
+-------------
+
+``constant i``: insert the constant ``i`` into the source code of the program.
+
 
 FAQ: How do I do X?
 ===================

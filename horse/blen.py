@@ -1,7 +1,6 @@
 from typing import (
     Callable,
     Iterator,
-    Mapping,
     MutableMapping,
     NewType,
     Protocol,
@@ -11,8 +10,6 @@ import typing
 import dataclasses
 import enum
 import operator
-import random
-
 
 from horse.types import Word
 import horse.types
@@ -465,51 +462,3 @@ def parse_non_binary_operation(word: Word) -> Instruction:
         return UnaryOperation(opcode, operand, result)
     else:
         assert False, "This should never happen."
-
-
-@dataclasses.dataclass
-class VirtualMemory(MutableMapping[Address, Word]):
-    offset: int
-    real_memory: MutableMapping[Address, Word]
-
-    def __repr__(self):
-        return f"{self.__class__.__name__}(offset={self.offset}, real_memory=...)"
-
-    def real_address(self, virtual_address: Address) -> Address:
-        return Address(
-            Word((virtual_address + self.offset) % (1 << horse.types.WORD_N_BITS))
-        )
-
-    def __getitem__(self, virtual_address: Address) -> Word:
-        return self.real_memory[self.real_address(virtual_address)]
-
-    def __setitem__(self, virtual_address: Address, value: Word) -> None:
-        self.real_memory[self.real_address(virtual_address)] = value
-
-    def __delitem__(self, virtual_address: Address) -> None:
-        del self.real_memory[self.real_address(virtual_address)]
-
-    def __len__(self) -> int:
-        return len(self.real_memory)
-
-    def __iter__(self) -> Iterator[Address]:
-        return iter(self.real_memory)
-
-
-def tournament(programs: Mapping[str, bytes], seed: int) -> str:
-    """Runs a tournament and determines the winner."""
-    memory = {Address(Word(i)): Word(0) for i in range(1 << horse.types.WORD_N_BITS)}
-
-    random.seed(seed)
-
-    offsets = [0 for program in programs]
-    for program in programs:
-        pass
-
-    # create machines
-    machines = [  # noqa: F841
-        Machine(name, memory=VirtualMemory(offset, memory))
-        for name, offset in zip(programs, offsets)
-    ]
-
-    return "it was a draw"
