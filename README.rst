@@ -106,7 +106,7 @@ Most binary operations treat their arguments as `two's complement signed integer
 __ https://en.wikipedia.org/wiki/Two%27s_complement
 
 
-Instructions for the blen machine
+Instructions for the Blen machine
 =================================
 
 Binary operations
