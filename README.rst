@@ -106,7 +106,7 @@ Special registers
 
 The Blen machine gives some registers special meaning:
 
-- ``R0`` is the ``ZERO_REGISTER``. The ``ZERO_REgISTER`` always contains 0.
+- ``R0`` is the ``ZERO_REGISTER``. The ``ZERO_REGISTER`` always contains 0.
   Writes to the ``ZERO_REGISTER`` do nothing.
 
 - ``R1`` is the ``PROGRAM_COUNTER``. 
