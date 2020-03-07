@@ -33,11 +33,16 @@ class ParseResult(Generic[T]):
 
 class ParseError(ValueError):
     def __init__(self, state: ParserState, message):
-        max_line = len(str(len(state.lines)))
-        max_char = len(str(max(len(line) for line in state.lines)))
-        super().__init__(
-            f"line {state.line:0{max_line}d}, char {state.char:0{max_char}d}: {message}"
+        max_line = len(str(len(state.lines) + 1))
+        max_char = len(str(max(len(line) for line in state.lines) + 1))
+        msg = "\n".join(
+            [
+                state.lines[state.line].strip(),
+                " " * state.char + "^",
+                f"line {state.line + 1:0{max_line}d}, char {state.char + 1:0{max_char}d}: {message}",
+            ]
         )
+        super().__init__(msg)
 
 
 REGISTER_RE = re.compile(r"R\d")
@@ -54,6 +59,13 @@ def parse_whitespace(current_state: ParserState) -> ParseResult[str]:
         return ParseResult(parsed, new_state)
     else:
         raise ParseError(current_state, "expected whitespace")
+
+
+def maybe_parse_whitespace(current_state: ParserState) -> ParseResult[str]:
+    try:
+        return parse_whitespace(current_state)
+    except ParseError:
+        return ParseResult("", current_state)
 
 
 def parse_keyword(keyword: str, current_state: ParserState) -> ParseResult[str]:
@@ -91,6 +103,13 @@ def parse_comment(current_state: ParserState) -> ParseResult[str]:
         raise ParseError(current_state, "expected comment")
 
 
+def maybe_parse_comment(current_state: ParserState) -> ParseResult[str]:
+    try:
+        return parse_comment(current_state)
+    except ParseError:
+        return ParseResult("", current_state)
+
+
 def parse_noop_args(current_state: ParserState) -> ParseResult[horse.blen.NoOp]:
     return ParseResult(horse.blen.NoOp(), current_state)
 
@@ -102,7 +121,9 @@ def parse_halt_args(current_state: ParserState) -> ParseResult[horse.blen.Halt]:
 def parse_load_args(current_state: ParserState) -> ParseResult[horse.blen.Load]:
     _result: ParseResult[Any]
 
-    _result = parse_register(current_state)
+    _result = parse_whitespace(current_state)
+
+    _result = parse_register(_result.new_state)
     address: horse.blen.Register = _result.result
 
     _result = parse_whitespace(_result.new_state)
@@ -116,7 +137,9 @@ def parse_load_args(current_state: ParserState) -> ParseResult[horse.blen.Load]:
 def parse_store_args(current_state: ParserState) -> ParseResult[horse.blen.Store]:
     _result: ParseResult[Any]
 
-    _result = parse_register(current_state)
+    _result = parse_whitespace(current_state)
+
+    _result = parse_register(_result.new_state)
     address: horse.blen.Register = _result.result
 
     _result = parse_whitespace(_result.new_state)
@@ -130,7 +153,9 @@ def parse_store_args(current_state: ParserState) -> ParseResult[horse.blen.Store
 def parse_copy_if_args(current_state: ParserState) -> ParseResult[horse.blen.CopyIf]:
     _result: ParseResult[Any]
 
-    _result = parse_register(current_state)
+    _result = parse_whitespace(current_state)
+
+    _result = parse_register(_result.new_state)
     register_to_test: horse.blen.Register = _result.result
 
     _result = parse_whitespace(_result.new_state)
@@ -153,7 +178,9 @@ def parse_binary_operation_args(
 ) -> ParseResult[horse.blen.BinaryOperation]:
     _result: ParseResult[Any]
 
-    _result = parse_register(current_state)
+    _result = parse_whitespace(current_state)
+
+    _result = parse_register(_result.new_state)
     operand0: horse.blen.Register = _result.result
 
     _result = parse_whitespace(_result.new_state)
@@ -177,7 +204,9 @@ def parse_unary_operation_args(
 ) -> ParseResult[horse.blen.UnaryOperation]:
     _result: ParseResult[Any]
 
-    _result = parse_register(current_state)
+    _result = parse_whitespace(current_state)
+
+    _result = parse_register(_result.new_state)
     operand: horse.blen.Register = _result.result
 
     _result = parse_whitespace(_result.new_state)
@@ -270,8 +299,6 @@ def parse_instruction(
     else:
         raise ParseError(current_state, "expected keyword")
 
-    _result = parse_whitespace(_result.new_state)
-
     return INSTRUCTIONS[keyword](_result.new_state)
 
 
@@ -286,11 +313,22 @@ def compile(lines: Sequence[str]) -> Sequence[Word]:
             instruction_result = parse_instruction(state)
         except ParseError as e:
             try:
-                _result = parse_whitespace(state)
-                _result = parse_comment(_result.new_state)
+                _result = maybe_parse_whitespace(state)
+                _result = maybe_parse_comment(_result.new_state)
+                if _result.new_state.remaining:
+                    raise ParseError(
+                        state, "expected instruction or comment or blank line"
+                    )
             except ParseError:
                 raise e
         else:
+            _result = maybe_parse_whitespace(instruction_result.new_state)
+            _result = maybe_parse_comment(_result.new_state)
+            if _result.new_state.remaining:
+                raise ParseError(
+                    instruction_result.new_state, "expected comment or end of line"
+                )
+
             compiled.append(instruction_result.result.to_word())
             state = dataclasses.replace(state, line=state.line + 1, char=0)
 
@@ -307,7 +345,11 @@ def main(arguments=None):
     with open(args.input, "r") as f:
         lines = f.readlines()
 
-    compiled = compile(lines)
+    try:
+        compiled = compile(lines)
+    except ParseError as e:
+        print(str(e))
+        return 1
 
     with open(args.output, "wb") as f:
         f.write(struct.pack(">{}H".format(len(compiled)), *compiled))
