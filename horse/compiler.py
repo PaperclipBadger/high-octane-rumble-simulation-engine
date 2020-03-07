@@ -33,8 +33,8 @@ class ParseResult(Generic[T]):
 
 class ParseError(ValueError):
     def __init__(self, state: ParserState, message):
-        max_line = len(state.lines)
-        max_char = max(len(line) for line in state.lines)
+        max_line = len(str(len(state.lines)))
+        max_char = len(str(max(len(line) for line in state.lines)))
         super().__init__(
             f"line {state.line:0{max_line}d}, char {state.char:0{max_char}d}: {message}"
         )
@@ -149,7 +149,7 @@ def parse_copy_if_args(current_state: ParserState) -> ParseResult[horse.blen.Cop
 
 
 def parse_binary_operation_args(
-    opcode: horse.blen.BinaryOpCode, current_state: ParserState
+    current_state: ParserState, opcode: horse.blen.BinaryOpCode
 ) -> ParseResult[horse.blen.BinaryOperation]:
     _result: ParseResult[Any]
 
@@ -173,7 +173,7 @@ def parse_binary_operation_args(
 
 
 def parse_unary_operation_args(
-    opcode: horse.blen.NonBinaryOpCode, current_state: ParserState
+    current_state: ParserState, opcode: horse.blen.NonBinaryOpCode
 ) -> ParseResult[horse.blen.UnaryOperation]:
     _result: ParseResult[Any]
 
@@ -281,7 +281,7 @@ def compile(lines: Sequence[str]) -> Sequence[Word]:
 
     _result: ParseResult[Any]
 
-    while state.remaining:
+    while state.line < len(state.lines):
         try:
             instruction_result = parse_instruction(state)
         except ParseError as e:
@@ -310,7 +310,7 @@ def main(arguments=None):
     compiled = compile(lines)
 
     with open(args.output, "wb") as f:
-        struct.pack_into(">{}H".format(len(compiled)), f, *compiled)
+        f.write(struct.pack(">{}H".format(len(compiled)), *compiled))
 
     return 0
 
