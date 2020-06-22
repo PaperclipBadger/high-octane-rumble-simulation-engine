@@ -9,8 +9,8 @@ import horse.types
 
 words = st.integers(0, horse.types.MAX_WORD)
 
-class WordsToNibbles(unittest.TestCase):
 
+class WordsToNibbles(unittest.TestCase):
     @hypothesis.given(words)
     def test_word_to_nibbles(self, word):
         ''' Nibbles return nibbles '''
@@ -24,6 +24,7 @@ class WordsToNibbles(unittest.TestCase):
         there = horse.types.word_to_nibbles(word)
         back_again = horse.types.nibbles_to_word(there)
         assert word == back_again, there
+
 
 if __name__ == '__main__':
     unittest.main()

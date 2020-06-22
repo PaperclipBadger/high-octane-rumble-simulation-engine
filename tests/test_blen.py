@@ -32,6 +32,7 @@ machines = st.builds(
     ),
 )
 
+
 class Tests(unittest.TestCase):
 
     @hypothesis.given(words)
@@ -84,6 +85,7 @@ class Tests(unittest.TestCase):
     def test_register_zero_always_zero(self, machine):
         machine.tick()
         assert machine.registers[horse.blen.Register.ZERO_REGISTER] == 0
+
 
 if __name__ == '__main__':
     unittest.main()
