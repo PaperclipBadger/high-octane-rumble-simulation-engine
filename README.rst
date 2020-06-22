@@ -6,6 +6,37 @@ It's a fight to the death!
 
 .. contents::
 
+----------
+How to use
+----------
+
+Start by installing poetry: https://python-poetry.org/
+
+Install the project dependencies:
+
+.. code::
+
+    poetry install
+
+Run the unit tests:
+
+.. code::
+
+    poetry run pytest
+
+Compile a program:
+
+.. code::
+
+    poetry run python -m horse.compiler --input program.blen --output program.blenc
+
+Run a tournament!
+
+.. code::
+
+    poetry run python -m horse.tournament jess.blenc blaine.blenc
+
+
 ---------------------
 The ``blen`` language
 ---------------------
@@ -106,7 +137,7 @@ Most binary operations treat their arguments as `two's complement signed integer
 __ https://en.wikipedia.org/wiki/Two%27s_complement
 
 
-Instructions for the blen machine
+Instructions for the Blen machine
 =================================
 
 Binary operations
@@ -165,6 +196,11 @@ The numbers in this list indicate the opcode of the relevant instruction:
     write ``-a`` to the ``result`` register.
 11. ``posit a result``: Treating the number in ``a`` as a signed integer,
     write the absolute value of ``a`` to the ``result`` register.
+
+Miscellaneous
+-------------
+
+``constant i``: insert the constant ``i`` into the source code of the program.
 
 
 FAQ: How do I do X?

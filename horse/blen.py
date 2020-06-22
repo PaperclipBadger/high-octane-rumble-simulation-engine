@@ -1,23 +1,16 @@
 from typing import (
     Callable,
     Iterator,
-    Generic,
-    Mapping,
     MutableMapping,
     NewType,
     Protocol,
-    Sequence,
-    TypeVar,
-    Type,
 )
 import typing
 
 import dataclasses
 import enum
+import logging
 import operator
-import random
-import re
-
 
 from horse.types import Word
 import horse.types
@@ -110,86 +103,6 @@ def signed_integer_to_word(signed_integer: SignedInteger, /) -> Word:
 
 
 @dataclasses.dataclass
-class ParserState:
-    lines: Sequence[str]
-    line: int
-    char: int
-
-    @property
-    def remaining(self) -> str:
-        return self.lines[self.line][self.char :]
-
-
-T = TypeVar("T")
-
-
-@dataclasses.dataclass
-class ParseResult(Generic[T]):
-    result: T
-    new_state: ParserState
-
-
-class ParseError(ValueError):
-    def __init__(self, state: ParserState, message):
-        max_line = len(state.lines)
-        max_char = max(len(line) for line in state.lines)
-        super().__init__(
-            f"line {state.line:0{max_line}d}, char {state.char:0{max_char}d}: {message}"
-        )
-
-
-REGISTER_RE = re.compile(r"R\d")
-WHITESPACE_RE = re.compile(r"\s+")
-
-
-def parse_whitespace(current_state: ParserState) -> ParseResult[str]:
-    match = WHITESPACE_RE.match(current_state.remaining)
-    if match is not None:
-        parsed = match.group(0)
-        new_state = dataclasses.replace(
-            current_state, char=current_state.char + len(parsed)
-        )
-        return ParseResult(parsed, new_state)
-    else:
-        raise ParseError(current_state, "expected whitespace")
-
-
-def parse_keyword(keyword: str, current_state: ParserState) -> ParseResult[str]:
-    if current_state.remaining.startswith(keyword):
-        parsed = keyword
-        new_state = dataclasses.replace(
-            current_state, char=current_state.char + len(parsed)
-        )
-        return ParseResult(parsed, new_state)
-    else:
-        raise ParseError(current_state, f"expected keyword {keyword}")
-
-
-def parse_register(current_state: ParserState) -> ParseResult[Register]:
-    match = REGISTER_RE.match(current_state.remaining)
-    if match is not None:
-        parsed = match.group(0)
-        result = horse.blen.Register[parsed]
-        new_state = dataclasses.replace(
-            current_state, char=current_state.char + len(parsed)
-        )
-        return ParseResult(result, new_state)
-    else:
-        raise ParseError(current_state, "expected register")
-
-
-def parse_comment(current_state: ParserState) -> ParseResult[str]:
-    if current_state.remaining.startswith(";"):
-        parsed = current_state.remaining
-        new_state = dataclasses.replace(
-            current_state, line=current_state.line + 1, char=0
-        )
-        return ParseResult(parsed, new_state)
-    else:
-        raise ParseError(current_state, "expected comment")
-
-
-@dataclasses.dataclass
 class RegisterMappingWrapper(MutableMapping[Register, Word]):
     wrapped_mapping: MutableMapping[Register, Word]
 
@@ -225,12 +138,23 @@ class Machine:
 
     def __post_init__(self) -> None:
         self.registers = RegisterMappingWrapper(self.registers)
+        self.logger = logging.getLogger(self.name)
+        self.logger.setLevel(logging.INFO)
+        handler = logging.FileHandler(self.name + ".log")
+        handler.setFormatter(logging.Formatter("%(message)s"))
+        self.logger.addHandler(handler)
 
     def tick(self) -> None:
         instruction_address = Address(self.registers[Register.PROGRAM_COUNTER])
+
+        self.logger.info(
+            "loading instruction at address {}".format(instruction_address)
+        )
         instruction_as_word = self.memory[instruction_address]
         instruction = parse(instruction_as_word)
 
+        self.logger.info("executing instruction {}".format(instruction))
+        instruction_as_word = self.memory[instruction_address]
         instruction(self)
 
         if not self.halted:
@@ -241,32 +165,19 @@ class Machine:
             )(self)
 
 
-_SelfType = TypeVar("_SelfType", bound="Instruction")
-
-
 @typing.runtime_checkable
 class Instruction(Protocol):
     def __call__(self, machine: Machine) -> None:
-        raise NotImplementedError
-
-    @classmethod
-    def parse(
-        cls: Type[_SelfType], current_state: ParserState
-    ) -> ParseResult[_SelfType]:
         raise NotImplementedError
 
     def to_word(self) -> Word:
         raise NotImplementedError
 
 
+@dataclasses.dataclass
 class NoOp(Instruction):
     def __call__(self, machine: Machine) -> None:
         pass
-
-    @classmethod
-    def parse(cls, current_state):
-        parse_result = parse_keyword("pass", current_state)
-        return ParseResult(cls(), parse_result.new_state)
 
     def to_word(self) -> Word:
         nibbles = [
@@ -278,14 +189,10 @@ class NoOp(Instruction):
         return horse.types.nibbles_to_word(nibbles)
 
 
+@dataclasses.dataclass
 class Halt(Instruction):
     def __call__(self, machine: Machine) -> None:
         machine.halted = True
-
-    @classmethod
-    def parse(cls, current_state):
-        parse_result = parse_keyword("halt", current_state)
-        return ParseResult(cls(), parse_result.new_state)
 
     def to_word(self) -> Word:
         nibbles = [
@@ -306,23 +213,6 @@ class Load(Instruction):
         address = Address(machine.registers[self.address])
         machine.registers[self.target] = machine.memory[address]
 
-    @classmethod
-    def parse(cls, current_state):
-        # if only Python had monads, but alas
-        keyword_result = parse_keyword("load", current_state)
-
-        whitespace0_result = parse_whitespace(keyword_result.new_state)
-
-        address_result = parse_register(whitespace0_result.new_state)
-        address = address_result.result
-
-        whitespace1_result = parse_whitespace(address_result.new_state)
-
-        target_result = parse_register(whitespace1_result.new_state)
-        target = target_result.result
-
-        return ParseResult(cls(address, target), target_result.new_state)
-
     def to_word(self) -> Word:
         nibbles = [
             horse.types.Nibble(BinaryOpCode.NON_BINARY_OPERATION.value),
@@ -341,23 +231,6 @@ class Store(Instruction):
     def __call__(self, machine: Machine) -> None:
         address = Address(machine.registers[self.address])
         machine.memory[address] = machine.registers[self.source]
-
-    @classmethod
-    def parse(cls, current_state):
-        # if only Python had monads, but alas
-        keyword_result = parse_keyword("store", current_state)
-
-        whitespace0_result = parse_whitespace(keyword_result.new_state)
-
-        address_result = parse_register(whitespace0_result.new_state)
-        address = address_result.result
-
-        whitespace1_result = parse_whitespace(address_result.new_state)
-
-        source_result = parse_register(whitespace1_result.new_state)
-        source = source_result.result
-
-        return ParseResult(cls(address, source), source_result.new_state)
 
     def to_word(self) -> Word:
         nibbles = [
@@ -378,30 +251,6 @@ class CopyIf(Instruction):
     def __call__(self, machine: Machine) -> None:
         if machine.registers[self.register_to_test]:
             machine.registers[self.source] = machine.registers[self.target]
-
-    @classmethod
-    def parse(cls, current_state):
-        # if only Python had monads, but alas
-        keyword_result = parse_keyword("copy_if", current_state)
-
-        whitespace0_result = parse_whitespace(keyword_result.new_state)
-
-        register_to_test_result = parse_register(whitespace0_result.new_state)
-        register_to_test = register_to_test_result.result
-
-        whitespace1_result = parse_whitespace(register_to_test_result.new_state)
-
-        source_result = parse_register(whitespace1_result.new_state)
-        source = source_result.result
-
-        whitespace2_result = parse_whitespace(source_result.new_state)
-
-        target_result = parse_register(whitespace2_result.new_state)
-        target = target_result.result
-
-        return ParseResult(
-            cls(register_to_test, source, target), target_result.new_state
-        )
 
     def to_word(self) -> Word:
         nibbles = [
@@ -426,38 +275,6 @@ class BinaryOperation(Instruction):
             machine.registers[self.operand0], machine.registers[self.operand1],
         )
 
-    @classmethod
-    def parse(cls, current_state):
-        # if only Python had monads, but alas
-        for opcode in BINARY_OPERATIONS:
-            try:
-                keyword_result = parse_keyword(opcode.name.lower(), current_state)
-            except ParseError:
-                continue
-            else:
-                break
-        else:
-            raise ParseError(current_state, "expected binary op keyword")
-
-        whitespace0_result = parse_whitespace(keyword_result.new_state)
-
-        operand0_result = parse_register(whitespace0_result.new_state)
-        operand0 = operand0_result.result
-
-        whitespace1_result = parse_whitespace(operand0_result.new_state)
-
-        operand1_result = parse_register(whitespace1_result.new_state)
-        operand1 = operand1_result.result
-
-        whitespace2_result = parse_whitespace(operand1_result.new_state)
-
-        result_result = parse_register(whitespace2_result.new_state)
-        result = result_result.result
-
-        return ParseResult(
-            cls(opcode, operand0, operand1, result), result_result.new_state
-        )
-
     def to_word(self) -> Word:
         nibbles = [
             horse.types.Nibble(self.opcode.value),
@@ -477,31 +294,6 @@ class UnaryOperation(Instruction):
     def __call__(self, machine: Machine) -> None:
         func = UNARY_OPERATIONS[self.opcode]
         machine.registers[self.result] = func(machine.registers[self.operand])
-
-    @classmethod
-    def parse(cls, current_state):
-        # if only Python had monads, but alas
-        for opcode in UNARY_OPERATIONS:
-            try:
-                keyword_result = parse_keyword(opcode.name.lower(), current_state)
-            except ParseError:
-                continue
-            else:
-                break
-        else:
-            raise ParseError(current_state, "expected unary op keyword")
-
-        whitespace0_result = parse_whitespace(keyword_result.new_state)
-
-        operand_result = parse_register(whitespace0_result.new_state)
-        operand = operand_result.result
-
-        whitespace1_result = parse_whitespace(operand_result.new_state)
-
-        result_result = parse_register(whitespace1_result.new_state)
-        result = result_result.result
-
-        return ParseResult(cls(opcode, operand, result), result_result.new_state)
 
     def to_word(self) -> Word:
         nibbles = [
@@ -684,51 +476,3 @@ def parse_non_binary_operation(word: Word) -> Instruction:
         return UnaryOperation(opcode, operand, result)
     else:
         assert False, "This should never happen."
-
-
-@dataclasses.dataclass
-class VirtualMemory(MutableMapping[Address, Word]):
-    offset: int
-    real_memory: MutableMapping[Address, Word]
-
-    def __repr__(self):
-        return f"{self.__class__.__name__}(offset={self.offset}, real_memory=...)"
-
-    def real_address(self, virtual_address: Address) -> Address:
-        return Address(
-            Word((virtual_address + self.offset) % (1 << horse.types.WORD_N_BITS))
-        )
-
-    def __getitem__(self, virtual_address: Address) -> Word:
-        return self.real_memory[self.real_address(virtual_address)]
-
-    def __setitem__(self, virtual_address: Address, value: Word) -> None:
-        self.real_memory[self.real_address(virtual_address)] = value
-
-    def __delitem__(self, virtual_address: Address) -> None:
-        del self.real_memory[self.real_address(virtual_address)]
-
-    def __len__(self) -> int:
-        return len(self.real_memory)
-
-    def __iter__(self) -> Iterator[Address]:
-        return iter(self.real_memory)
-
-
-def tournament(programs: Mapping[str, bytes], seed: int) -> str:
-    """Runs a tournament and determines the winner."""
-    memory = {Address(Word(i)): Word(0) for i in range(1 << horse.types.WORD_N_BITS)}
-
-    random.seed(seed)
-
-    offsets = [0 for program in programs]
-    for program in programs:
-        pass
-
-    # create machines
-    machines = [  # noqa: F841
-        Machine(name, memory=VirtualMemory(offset, memory))
-        for name, offset in zip(programs, offsets)
-    ]
-
-    return "it was a draw"
