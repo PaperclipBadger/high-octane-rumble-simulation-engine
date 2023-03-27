@@ -12,6 +12,10 @@ How to use
 
 Start by installing poetry: https://python-poetry.org/
 
+.. code::
+
+    pip install poetry
+
 Install the project dependencies:
 
 .. code::
@@ -209,3 +213,18 @@ FAQ: How do I do X?
 Move the value in ``RX`` to ``RY``: ``add R0 RX RY``
 
 Jump to the instruction at the address in ``RX``: ``add R0 RX R1``
+
+---
+Dev
+---
+
+Check code quality
+
+.. code::
+    pip install -Uq black flake8 mypy && black --check . && mypy . && flake8 .
+
+Check code coverage:
+
+.. code::
+    pip install -Uq pytest coverage && coverage run --omit="test_*.py" -m pytest && coverage html && open ./htmlcov/index.html
+
