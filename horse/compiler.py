@@ -229,7 +229,8 @@ def parse_unary_operation_args(
     result: horse.blen.Register = _result.result
 
     return ParseResult(
-        horse.blen.UnaryOperation(opcode, operand, result), _result.new_state,
+        horse.blen.UnaryOperation(opcode, operand, result),
+        _result.new_state,
     )
 
 
@@ -278,22 +279,28 @@ INSTRUCTIONS: Dict[
     "load": parse_load_args,
     "store": parse_store_args,
     "increment": functools.partial(
-        parse_unary_operation_args, opcode=horse.blen.NonBinaryOpCode.INCREMENT,
+        parse_unary_operation_args,
+        opcode=horse.blen.NonBinaryOpCode.INCREMENT,
     ),
     "decrement": functools.partial(
-        parse_unary_operation_args, opcode=horse.blen.NonBinaryOpCode.DECREMENT,
+        parse_unary_operation_args,
+        opcode=horse.blen.NonBinaryOpCode.DECREMENT,
     ),
     "convert_to_bool": functools.partial(
-        parse_unary_operation_args, opcode=horse.blen.NonBinaryOpCode.CONVERT_TO_BOOL,
+        parse_unary_operation_args,
+        opcode=horse.blen.NonBinaryOpCode.CONVERT_TO_BOOL,
     ),
     "bitwise_not": functools.partial(
-        parse_unary_operation_args, opcode=horse.blen.NonBinaryOpCode.BITWISE_NOT,
+        parse_unary_operation_args,
+        opcode=horse.blen.NonBinaryOpCode.BITWISE_NOT,
     ),
     "negate": functools.partial(
-        parse_unary_operation_args, opcode=horse.blen.NonBinaryOpCode.NEGATE,
+        parse_unary_operation_args,
+        opcode=horse.blen.NonBinaryOpCode.NEGATE,
     ),
     "posit": functools.partial(
-        parse_unary_operation_args, opcode=horse.blen.NonBinaryOpCode.POSIT,
+        parse_unary_operation_args,
+        opcode=horse.blen.NonBinaryOpCode.POSIT,
     ),
 }
 

@@ -42,7 +42,9 @@ class VirtualMemory(MutableMapping[Address, Word]):
 
 
 def tournament(
-    programs: Mapping[str, Sequence[Word]], seed: int, max_steps: int,
+    programs: Mapping[str, Sequence[Word]],
+    seed: int,
+    max_steps: int,
 ) -> None:
     """Runs a tournament and determines the winner."""
     memory = {Address(Word(i)): Word(0) for i in range(1 << horse.types.WORD_N_BITS)}

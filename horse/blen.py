@@ -129,6 +129,7 @@ class RegisterMappingWrapper(MutableMapping[Register, Word]):
     def __iter__(self) -> Iterator[Register]:
         return iter(self.wrapped_mapping)
 
+
 _NAME_ALPHABET = string.ascii_letters + string.digits + "-_"
 
 
@@ -140,7 +141,7 @@ class Machine:
         default_factory=lambda: {register: Word(0) for register in Register}
     )
     halted: bool = False
-    
+
     # Hidden flag for testing
     _testing: bool = dataclasses.field(default=False, repr=False)
 
@@ -149,8 +150,9 @@ class Machine:
         self.logger = self._make_logger()
 
     def _make_logger(self) -> logging.Logger:
-        assert all([char in _NAME_ALPHABET for char in self.name]), \
-            f"Invalid character in machine name: {self.name}"
+        assert all(
+            [char in _NAME_ALPHABET for char in self.name]
+        ), f"Invalid character in machine name: {self.name}"
         assert len(self.name) > 0, "Machine name must be non-empty"
 
         # Make a logger for this machine
@@ -310,7 +312,8 @@ class BinaryOperation(Instruction):
     def __call__(self, machine: Machine) -> None:
         func = BINARY_OPERATIONS[self.opcode]
         machine.registers[self.result] = func(
-            machine.registers[self.operand0], machine.registers[self.operand1],
+            machine.registers[self.operand0],
+            machine.registers[self.operand1],
         )
 
     def to_word(self) -> Word:

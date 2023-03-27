@@ -28,8 +28,9 @@ machines = st.builds(
         {register: words for register in horse.blen.Register}
     ),
     # _testing=True,
-    _testing = st.just(True),
+    _testing=st.just(True),
 )
+
 
 @hypothesis.given(words)
 def test_signed_integer_encode_decode(word):
@@ -37,13 +38,16 @@ def test_signed_integer_encode_decode(word):
     back_again = horse.blen.signed_integer_to_word(there)
     assert word == back_again, there
 
+
 @hypothesis.given(binary_operations, words, words)
 def test_binary_operations_return_words(func, operand0, operand1):
     assert 0 <= func(operand0, operand1) <= horse.types.MAX_WORD
 
+
 @hypothesis.given(unary_operations, words)
 def test_unary_operations_return_words(func, operand):
     assert 0 <= func(operand) <= horse.types.MAX_WORD
+
 
 @hypothesis.given(
     st.sampled_from((horse.blen.test_equal, horse.blen.test_greater_than)),
@@ -54,10 +58,12 @@ def test_comparison_functions_returns_bool_values(func, operand0, operand1):
     result = func(operand0, operand1)
     assert result == horse.types.TRUE or result == horse.types.FALSE
 
+
 @hypothesis.given(words)
 def test_convert_to_bool_returns_bool_values(operand):
     result = horse.blen.convert_to_bool(operand)
     assert result == horse.types.TRUE or result == horse.types.FALSE
+
 
 @hypothesis.given(in_range_signed_integers)
 def test_increment_non_overflow(operand):
@@ -66,6 +72,7 @@ def test_increment_non_overflow(operand):
     if MIN_SIGNED_INT <= true_result <= MAX_SIGNED_INT:
         assert result == horse.blen.signed_integer_to_word(true_result)
 
+
 @hypothesis.given(in_range_signed_integers)
 def test_decrement_non_overflow(operand):
     result = horse.blen.decrement(horse.blen.signed_integer_to_word(operand))
@@ -73,9 +80,11 @@ def test_decrement_non_overflow(operand):
     if MIN_SIGNED_INT <= true_result <= MAX_SIGNED_INT:
         assert result == horse.blen.signed_integer_to_word(true_result)
 
+
 @hypothesis.given(words)
 def test_parse_defined_for_all_words(word):
     assert isinstance(horse.blen.parse(word), horse.blen.Instruction)
+
 
 @hypothesis.given(machines)
 def test_register_zero_always_zero(machine):
