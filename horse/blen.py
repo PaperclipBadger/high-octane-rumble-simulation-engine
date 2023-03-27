@@ -1,4 +1,5 @@
 from typing import (
+    cast,
     Callable,
     Iterator,
     MutableMapping,
@@ -442,9 +443,15 @@ def _signed_unop(
     return signed_unop
 
 
-bitwise_not = _signed_unop(operator.invert)
-negate = _signed_unop(operator.neg)
-posit = _signed_unop(operator.pos)
+# TODO: The cast is temporary to appease mypy. Investigate what's wrong here.
+# horse/blen.py:445: error: Argument 1 to "_signed_unop" has incompatible type "Callable[[_SupportsInversion[_T_co]], _T_co]"; expected "Callable[[SignedInteger], SignedInteger]"  [arg-type]
+# horse/blen.py:446: error: Argument 1 to "_signed_unop" has incompatible type "Callable[[_SupportsNeg[_T_co]], _T_co]"; expected "Callable[[SignedInteger], SignedInteger]"  [arg-type]
+# horse/blen.py:447: error: Argument 1 to "_signed_unop" has incompatible type "Callable[[_SupportsPos[_T_co]], _T_co]"; expected "Callable[[SignedInteger], SignedInteger]"  [arg-type]
+bitwise_not = _signed_unop(
+    cast(Callable[[SignedInteger], SignedInteger], operator.invert)
+)
+negate = _signed_unop(cast(Callable[[SignedInteger], SignedInteger], operator.neg))
+posit = _signed_unop(cast(Callable[[SignedInteger], SignedInteger], operator.pos))
 
 
 UNARY_OPERATIONS = {
