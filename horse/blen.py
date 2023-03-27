@@ -134,6 +134,42 @@ class RegisterMappingWrapper(MutableMapping[Register, Word]):
 _NAME_ALPHABET = string.ascii_letters + string.digits + "-_"
 
 
+def _make_logger(name: str, _testing: bool = False) -> logging.Logger:
+    assert all(
+        [char in _NAME_ALPHABET for char in name]
+    ), f"Invalid character in machine name: {name}"
+    assert len(name) > 0, "Machine name must be non-empty"
+
+    # Make a logger for this machine
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.INFO)
+
+    # Add a file handler
+    if not os.path.exists("logs"):
+        os.mkdir("logs")
+    if _testing:
+        if not os.path.exists(os.path.join("logs", "testing")):
+            os.mkdir(os.path.join("logs", "testing"))
+        filename = os.path.join("logs", "testing", name + ".log")
+    else:
+        filename = os.path.join("logs", name + ".log")
+
+    if os.path.exists(filename):
+        if _testing:
+            # When testing it is fine to overwrite the log files
+            os.remove(filename)
+        else:
+            raise FileExistsError(
+                "A log file already exists for machine {}. "
+                "Please delete it first.".format(filename)
+            )
+    handler = logging.FileHandler(filename)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+
+    logger.addHandler(handler)
+    return logger
+
+
 @dataclasses.dataclass
 class Machine:
     name: str
@@ -148,42 +184,7 @@ class Machine:
 
     def __post_init__(self) -> None:
         self.registers = RegisterMappingWrapper(self.registers)
-        self.logger = self._make_logger()
-
-    def _make_logger(self) -> logging.Logger:
-        assert all(
-            [char in _NAME_ALPHABET for char in self.name]
-        ), f"Invalid character in machine name: {self.name}"
-        assert len(self.name) > 0, "Machine name must be non-empty"
-
-        # Make a logger for this machine
-        logger = logging.getLogger(self.name)
-        logger.setLevel(logging.INFO)
-
-        # Add a file handler
-        if not os.path.exists("logs"):
-            os.mkdir("logs")
-        if self._testing:
-            if not os.path.exists(os.path.join("logs", "testing")):
-                os.mkdir(os.path.join("logs", "testing"))
-            filename = os.path.join("logs", "testing", self.name + ".log")
-        else:
-            filename = os.path.join("logs", self.name + ".log")
-
-        if os.path.exists(filename):
-            if self._testing:
-                # When testing it is fine to overwrite the log files
-                os.remove(filename)
-            else:
-                raise FileExistsError(
-                    "A log file already exists for machine {}. "
-                    "Please delete it first.".format(filename)
-                )
-        handler = logging.FileHandler(filename)
-        handler.setFormatter(logging.Formatter("%(message)s"))
-
-        logger.addHandler(handler)
-        return logger
+        self.logger = _make_logger(self.name, _testing=self._testing)
 
     def tick(self) -> None:
         instruction_address = Address(self.registers[Register.PROGRAM_COUNTER])
