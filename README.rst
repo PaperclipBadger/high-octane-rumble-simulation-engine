@@ -221,10 +221,12 @@ Dev
 Check code quality
 
 .. code::
+
     pip install -Uq black flake8 mypy && black --check . && mypy . && flake8 .
 
 Check code coverage:
 
 .. code::
+
     pip install -Uq pytest coverage && coverage run --omit="test_*.py" -m pytest && coverage html && open ./htmlcov/index.html
 
