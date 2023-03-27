@@ -11,6 +11,9 @@ import dataclasses
 import enum
 import logging
 import operator
+import os
+import string
+
 
 from horse.types import Word
 import horse.types
@@ -126,6 +129,8 @@ class RegisterMappingWrapper(MutableMapping[Register, Word]):
     def __iter__(self) -> Iterator[Register]:
         return iter(self.wrapped_mapping)
 
+_NAME_ALPHABET = string.ascii_letters + string.digits + "-_"
+
 
 @dataclasses.dataclass
 class Machine:
@@ -135,14 +140,47 @@ class Machine:
         default_factory=lambda: {register: Word(0) for register in Register}
     )
     halted: bool = False
+    
+    # Hidden flag for testing
+    _testing: bool = dataclasses.field(default=False, repr=False)
 
     def __post_init__(self) -> None:
         self.registers = RegisterMappingWrapper(self.registers)
-        self.logger = logging.getLogger(self.name)
-        self.logger.setLevel(logging.INFO)
-        handler = logging.FileHandler(self.name + ".log")
+        self.logger = self._make_logger()
+
+    def _make_logger(self) -> logging.Logger:
+        assert all([char in _NAME_ALPHABET for char in self.name]), \
+            f"Invalid character in machine name: {self.name}"
+        assert len(self.name) > 0, "Machine name must be non-empty"
+
+        # Make a logger for this machine
+        logger = logging.getLogger(self.name)
+        logger.setLevel(logging.INFO)
+
+        # Add a file handler
+        if not os.path.exists("logs"):
+            os.mkdir("logs")
+        if self._testing:
+            if not os.path.exists(os.path.join("logs", "testing")):
+                os.mkdir(os.path.join("logs", "testing"))
+            filename = os.path.join("logs", "testing", self.name + ".log")
+        else:
+            filename = os.path.join("logs", self.name + ".log")
+
+        if os.path.exists(filename):
+            if self._testing:
+                # When testing it is fine to overwrite the log files
+                os.remove(filename)
+            else:
+                raise FileExistsError(
+                    "A log file already exists for machine {}. "
+                    "Please delete it first.".format(filename)
+                )
+        handler = logging.FileHandler(filename)
         handler.setFormatter(logging.Formatter("%(message)s"))
-        self.logger.addHandler(handler)
+
+        logger.addHandler(handler)
+        return logger
 
     def tick(self) -> None:
         instruction_address = Address(self.registers[Register.PROGRAM_COUNTER])
