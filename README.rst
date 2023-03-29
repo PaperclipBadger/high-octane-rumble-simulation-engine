@@ -242,7 +242,7 @@ A program that slides down some no-ops before looping back to the top:
    ; hence next loop will begin executing instruction 0, i.e. the first one
    decrement R0 PROGRAM_COUNTER
 
-A program fills the address space with halt:
+A program fills the address space with halt, overwriting the other programs and causing them to halt:
 
 .. code::
 
