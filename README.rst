@@ -144,7 +144,7 @@ a boolean value. Instructions that return a boolean value return
 
 .. code::
 
-    TRUE = 65536  (1111111111111111 in binary)
+    TRUE = 65535  (1111111111111111 in binary)
     FALSE = 0     (0000000000000000 in binary)
 
 Signed integers
