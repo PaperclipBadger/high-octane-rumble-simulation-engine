@@ -239,7 +239,7 @@ A program that slides down some no-ops before looping back to the top:
    no_op
    ; decrement R0 gives us -1, which we write to the program counter
    ; after executing this instruction we increment the program counter
-   ; hence next loop will begin executing R0
+   ; hence next loop will begin executing instruction 0, i.e. the first one
    decrement R0 PROGRAM_COUNTER
 
 A program fills the address space with halt:
@@ -257,10 +257,11 @@ A program fills the address space with halt:
 
    ; we will use R3 as the address to write to
    ; needs to be after our program
+   ; our program has 15 instructions, so 16 is a good place to start :)
    increment R3 R3      ; R3 = 1
    increment R3 R3      ; R3 = 2
-   left_shift R3 R3 R3  ; R3 = 8
-   multiply R3 R3 R3    ; R3 = 64
+   multiply R3 R3 R3    ; R3 = 4
+   multiply R3 R3 R3    ; R3 = 16
 
    ; we will use R4 as the jump-back register
    ; tells us how long our loop is so we can reset the program counter
