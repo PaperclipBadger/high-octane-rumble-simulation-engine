@@ -226,6 +226,8 @@ Examples
 
 A program that slides down some no-ops before looping back to the top:
 
+.. code::
+
    ; no_op does nothing
    no_op
    no_op
@@ -241,6 +243,8 @@ A program that slides down some no-ops before looping back to the top:
    decrement R0 PROGRAM_COUNTER
 
 A program fills the address space with halt:
+
+.. code::
 
    ; we will use R2 as the register containing the halt instruction
    ; any integer that begins 00000001 will be treated as a halt
