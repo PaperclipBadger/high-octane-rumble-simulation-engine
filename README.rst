@@ -6,6 +6,24 @@ It's a fight to the death!
 
 .. contents::
 
+-------------
+What is this?
+-------------
+
+Once my dad told me a story from his time as a young software engineer.
+To pass the time, he and his friends would have programming deathmatches.
+One of them would write a compiler, then the others would write programs.
+All the programs would be put in the same block of memory,
+and the last program still running wins.
+
+It sounded like fun, so for a birthday party (yes, I am very cool)
+I wrote this compiler and challenged my friends to a tournament.
+
+This programming language is not intended to be practical;
+it explicitly lacks a number of convenience features,
+like instructions for loading small constants directly into registers,
+to make useful programs harder (but more fun) to write.
+
 ----------
 How to use
 ----------
@@ -46,13 +64,13 @@ The ``blen`` language
 What is the Blen machine?
 =========================
 
-The Blen machine is composed of _registers_ and _memory_.
+The Blen machine is composed of *registers* and *memory*.
 
-A _register_ is a box that contains a number. When a number is in a register, 
+A *register* is a box that contains a number. When a number is in a register, 
 the machine can use it to do maths. The Blen machine only has 16 registers,
 labelled ``R0`` to ``R15``.
 
-The _memory_ is a mapping from addresses to numbers. The machine can't do maths
+The *memory* is a mapping from addresses to numbers. The machine can't do maths
 on numbers when they're in the memory, but it can load numbers from the memory
 into registers and store numbers from registers into the memory to use them
 later. The memory also contains the program instructions.
@@ -69,7 +87,7 @@ The Blen machine runs using the following loop:
 How does the Blen machine parse instructions?
 =============================================
 
-The Blen machine represents numbers using 16 bits. When it parses isntructions,
+The Blen machine represents numbers using 16 bits. When it parses instructions,
 it groups those 16 bits into four 4-bit numbers (nibbles). For example, this is
 the way that the Blen machine parses the number 38611 (1001011011010011):
 
@@ -82,7 +100,7 @@ the way that the Blen machine parses the number 38611 (1001011011010011):
 +--------+----------+----------+--------+--------------------------------+
 
 All binary mathematical operations are parsed this way: the first nibble is an
-_opcode_ that tells the machine which function to call, the next two nibbles
+*opcode* that tells the machine which function to call, the next two nibbles
 tell the machine which two registers to use as arguments for the function, and
 the last nibble tells the machine which register to store the result in.
 
@@ -126,7 +144,7 @@ a boolean value. Instructions that return a boolean value return
 
 .. code::
 
-    TRUE = 65536  (1111111111111111 in binary)
+    TRUE = 65535  (1111111111111111 in binary)
     FALSE = 0     (0000000000000000 in binary)
 
 Signed integers
@@ -201,6 +219,60 @@ Miscellaneous
 -------------
 
 ``constant i``: insert the constant ``i`` into the source code of the program.
+``; comment`` is a comment; anything from ``;`` to end-of-line will be ignored by the compiler. 
+
+Examples
+--------
+
+A program that slides down some no-ops before looping back to the top:
+
+.. code::
+
+   ; no_op does nothing
+   no_op
+   no_op
+   no_op
+   no_op
+   no_op
+   no_op
+   no_op
+   no_op
+   ; decrement R0 gives us -1, which we write to the program counter
+   ; after executing this instruction we increment the program counter
+   ; hence next loop will begin executing instruction 0, i.e. the first one
+   decrement R0 PROGRAM_COUNTER
+
+A program fills the address space with halt, overwriting the other programs and causing them to halt:
+
+.. code::
+
+   ; we will use R2 as the register containing the halt instruction
+   ; any integer that begins 00000001 will be treated as a halt
+   ; i.e. anything between 512 and 1023
+   increment R2       ; R2 =           1 = 1
+   increment R2       ; R2 =          10 = 2
+   multiply R2 R2 R2  ; R2 =         100 = 4
+   multiply R2 R2 R2  ; R2 =      1 0000 = 16
+   multiply R2 R2 R2  ; R2 = 1 0000 0000 = 512
+
+   ; we will use R3 as the address to write to
+   ; needs to be after our program
+   ; our program has 15 instructions, so 16 is a good place to start :)
+   increment R3 R3      ; R3 = 1
+   increment R3 R3      ; R3 = 2
+   multiply R3 R3 R3    ; R3 = 4
+   multiply R3 R3 R3    ; R3 = 16
+
+   ; we will use R4 as the jump-back register
+   ; tells us how long our loop is so we can reset the program counter
+   increment R4 R4      ; R4 = 1
+   increment R4 R4      ; R4 = 2
+   increment R4 R4      ; R4 = 3
+
+   ; now we do a tight loop to minimize our exposure
+   store R3 R2      ; put the value in R2 (halt) at memory address R3
+   increment R3 R3  ; increment the address to which we write
+   subtract PROGRAM_COUNTER R4 PROGRAM_COUNTER  ; loop!!!
 
 
 FAQ: How do I do X?
@@ -208,4 +280,4 @@ FAQ: How do I do X?
 
 Move the value in ``RX`` to ``RY``: ``add R0 RX RY``
 
-Jump to the instruction at the address in ``RX``: ``add R0 RX R1``
+Jump to the instruction at the address in ``RX``: ``add R0 RX PROGRAM_COUNTER``
