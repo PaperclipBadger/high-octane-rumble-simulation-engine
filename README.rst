@@ -224,6 +224,12 @@ Check code quality
 
     pip install -Uq black flake8 mypy && black --check . && mypy . && flake8 .
 
+Or with pre-commit
+
+.. code::
+
+    pip install -Uq pre-commit && pre-commit run --all-files
+
 Check code coverage:
 
 .. code::
