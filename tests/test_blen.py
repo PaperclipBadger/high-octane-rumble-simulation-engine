@@ -27,8 +27,6 @@ machines = st.builds(
     registers=st.fixed_dictionaries(
         {register: words for register in horse.blen.Register}
     ),
-    # _testing=True,
-    _testing=st.just(True),
 )
 
 
@@ -87,6 +85,11 @@ def test_parse_defined_for_all_words(word):
 
 
 @hypothesis.given(machines)
-def test_register_zero_always_zero(machine):
+def test_register_zero_always_zero(machine: horse.blen.Machine):
+    # Remove the file handler. We can't do this with a fixture because
+    # hypothesis doesn't play nice with fixtures, and caplog is not
+    # available as a context manager.
+    machine.logger.handlers = []
+
     machine.tick()
     assert machine.registers[horse.blen.Register.ZERO_REGISTER] == 0
