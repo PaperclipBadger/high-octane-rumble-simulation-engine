@@ -12,9 +12,9 @@ python = "^3.8.1"
 pytest = "^7.2.2"
 restview = "^3.0.1"
 hypothesis = "^6.70.1"
-black = "^23.1.0"
-flake8 = "^6.0.0"
-mypy = "^1.1.1"
+# black = "^23.1.0"
+# flake8 = "^6.0.0"
+# mypy = "^1.1.1"
 
 [build-system]
 requires = ["poetry>=0.12"]
