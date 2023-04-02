@@ -1,4 +1,5 @@
 from typing import (
+    cast,
     Callable,
     Iterator,
     MutableMapping,
@@ -11,6 +12,9 @@ import dataclasses
 import enum
 import logging
 import operator
+import os
+import string
+
 
 from horse.types import Word
 import horse.types
@@ -127,6 +131,9 @@ class RegisterMappingWrapper(MutableMapping[Register, Word]):
         return iter(self.wrapped_mapping)
 
 
+_NAME_ALPHABET = string.ascii_letters + string.digits + "-_"
+
+
 @dataclasses.dataclass
 class Machine:
     name: str
@@ -138,10 +145,39 @@ class Machine:
 
     def __post_init__(self) -> None:
         self.registers = RegisterMappingWrapper(self.registers)
+
+        # Make sure the name is valid
+        assert all(
+            [char in _NAME_ALPHABET for char in self.name]
+        ), f"Invalid character in machine name: {self.name}"
+        assert len(self.name) > 0, "Machine name must be non-empty"
+
+        # Set up logging
         self.logger = logging.getLogger(self.name)
         self.logger.setLevel(logging.INFO)
-        handler = logging.FileHandler(self.name + ".log")
+
+        self._add_log_file_handler()
+
+    def _add_log_file_handler(self) -> None:
+        # Add a file handler
+        if not os.path.exists("logs"):
+            # No 'logs' folder, so don't log to file
+            return
+
+        filename = os.path.join("logs", self.name + ".log")
+
+        if os.path.exists(filename):
+            raise FileExistsError(
+                f"A log file already exists for machine {self.name}. "
+                "Please delete it first."
+            )
+
+        # Delay writing to the file until the first message is logged
+        # Otherwise, the file will be created even if no messages are logged
+        # which messes up the tests
+        handler = logging.FileHandler(filename, delay=True)
         handler.setFormatter(logging.Formatter("%(message)s"))
+
         self.logger.addHandler(handler)
 
     def tick(self) -> None:
@@ -272,7 +308,8 @@ class BinaryOperation(Instruction):
     def __call__(self, machine: Machine) -> None:
         func = BINARY_OPERATIONS[self.opcode]
         machine.registers[self.result] = func(
-            machine.registers[self.operand0], machine.registers[self.operand1],
+            machine.registers[self.operand0],
+            machine.registers[self.operand1],
         )
 
     def to_word(self) -> Word:
@@ -401,9 +438,15 @@ def _signed_unop(
     return signed_unop
 
 
-bitwise_not = _signed_unop(operator.invert)
-negate = _signed_unop(operator.neg)
-posit = _signed_unop(operator.pos)
+# TODO: The cast is temporary to appease mypy. Investigate what's wrong here.
+# horse/blen.py:445: error: Argument 1 to "_signed_unop" has incompatible type "Callable[[_SupportsInversion[_T_co]], _T_co]"; expected "Callable[[SignedInteger], SignedInteger]"  [arg-type]
+# horse/blen.py:446: error: Argument 1 to "_signed_unop" has incompatible type "Callable[[_SupportsNeg[_T_co]], _T_co]"; expected "Callable[[SignedInteger], SignedInteger]"  [arg-type]
+# horse/blen.py:447: error: Argument 1 to "_signed_unop" has incompatible type "Callable[[_SupportsPos[_T_co]], _T_co]"; expected "Callable[[SignedInteger], SignedInteger]"  [arg-type]
+bitwise_not = _signed_unop(
+    cast(Callable[[SignedInteger], SignedInteger], operator.invert)
+)
+negate = _signed_unop(cast(Callable[[SignedInteger], SignedInteger], operator.neg))
+posit = _signed_unop(cast(Callable[[SignedInteger], SignedInteger], operator.pos))
 
 
 UNARY_OPERATIONS = {
